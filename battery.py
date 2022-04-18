@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from misc import Power
-from usr.moudles.logging import getLogger
+from usr.modules.logging import getLogger
 
 log = getLogger(__name__)
 

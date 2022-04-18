@@ -17,8 +17,8 @@ import ql_fs
 import ujson
 import _thread
 
-from usr.moudles.logging import getLogger
-from usr.moudles.common import Singleton, option_lock
+from usr.modules.logging import getLogger
+from usr.modules.common import Singleton, option_lock
 
 log = getLogger(__name__)
 

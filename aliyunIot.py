@@ -19,8 +19,8 @@ import osTimer
 
 from aLiYun import aLiYun
 
-from usr.moudles.logging import getLogger
-from usr.moudles.common import numiter, option_lock, CloudObservable, CloudObjectModel
+from usr.modules.logging import getLogger
+from usr.modules.common import numiter, option_lock, CloudObservable, CloudObjectModel
 
 log = getLogger(__name__)
 

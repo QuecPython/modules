@@ -15,7 +15,7 @@
 import _thread
 import osTimer
 from machine import Pin
-from usr.moudles.logging import getLogger
+from usr.modules.logging import getLogger
 
 log = getLogger(__name__)
 
