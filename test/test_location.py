@@ -50,5 +50,5 @@ def test_location():
     print("[test_location] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_location()

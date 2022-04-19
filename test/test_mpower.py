@@ -67,5 +67,5 @@ def test_low_energy_manage():
     print("[test_low_energy_manage] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_low_energy_manage()

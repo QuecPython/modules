@@ -12,14 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import uos
+import uzlib
+import ql_fs
 import ujson
 import utime
 import osTimer
 import quecIot
+import uhashlib
+import ubinascii
+import app_fota_download
 
+from misc import Power
 from queue import Queue
 
-from usr.modules.ota import SOTA
 from usr.modules.logging import getLogger
 from usr.modules.common import CloudObservable, CloudObjectModel
 
@@ -280,8 +286,7 @@ class QuecThing(CloudObservable):
         self.__mcu_version = mcu_version
         self.__object_model = None
 
-        self.__file_size = 0
-        self.__md5_value = ""
+        self.__ota = QuecOTA()
         self.__post_result_wait_queue = Queue(maxsize=16)
         self.__quec_timer = osTimer()
 
@@ -307,39 +312,6 @@ class QuecThing(CloudObservable):
         if self.__post_result_wait_queue.size() >= 16:
             self.__post_result_wait_queue.get()
         self.__post_result_wait_queue.put(res)
-
-    def __sota_download_info(self, size, md5_value):
-        self.__file_size = size
-        self.__md5_value = md5_value
-
-    def __sota_upgrade_start(self, start_addr, need_download_size):
-        download_size = 0
-        sota_mode = SOTA()
-        while need_download_size != 0:
-            readsize = 4096
-            if (readsize > need_download_size):
-                readsize = need_download_size
-            updateFile = quecIot.mcuFWDataRead(start_addr, readsize)
-            sota_mode.write_update_data(updateFile)
-            log.debug("Download File Size: %s" % readsize)
-            need_download_size -= readsize
-            start_addr += readsize
-            download_size += readsize
-            if (download_size == self.__file_size):
-                log.debug("File Download Success, Update Start.")
-                self.ota_action(3)
-                if sota_mode.check_md5(self.__md5_value):
-                    if sota_mode.file_update():
-                        sota_mode.sota_set_flag()
-                        log.debug("File Update Success, Power Restart.")
-                    else:
-                        log.debug("File Update Failed, Power Restart.")
-                break
-            else:
-                self.ota_action(2)
-
-        res_data = ("object_model", [("power_restart", 1)])
-        self.notifyObservers(self, *res_data)
 
     def __data_format(self, k, v):
         """Publish data format by AliObjectModel
@@ -402,21 +374,15 @@ class QuecThing(CloudObservable):
                 - `errcode`: detail code
                 - `event_data`: event data info, data type: bytes or dict
         """
-        res_data = ()
+        res_datas = []
         event = data[0]
         errcode = data[1]
         eventdata = b""
         if len(data) > 2:
             eventdata = data[2]
-        log.info("Event[%s] ErrCode[%s] Msg[%s] EventData[%s]" % (event, errcode, EVENT_CODE.get(event, {}).get(errcode, ""), eventdata))
+        log.info("[Event-ErrCode-Msg][%s][%s][%s] EventData[%s]" % (event, errcode, EVENT_CODE.get(event, {}).get(errcode, ""), eventdata))
 
-        if event == 3:
-            if errcode == 10200:
-                if eventdata:
-                    file_info = eval(eventdata)
-                    log.info("OTA File Info: componentNo: %s, sourceVersion: %s, targetVersion: %s, "
-                             "batteryLimit: %s, minSignalIntensity: %s, minSignalIntensity: %s" % file_info)
-        elif event == 4:
+        if event == 4:
             if errcode == 10200:
                 self.__put_post_res(True)
             elif errcode == 10210:
@@ -433,15 +399,17 @@ class QuecThing(CloudObservable):
             if errcode == 10200:
                 # TODO: Data Type Passthrough (Not Support Now).
                 res_data = ("raw_data", eventdata)
+                res_datas.append(res_data)
             elif errcode == 10210:
                 dl_data = [(self.__object_model.items_id[k], v.decode() if isinstance(v, bytes) else v) for k, v in eventdata.items()]
                 res_data = ("object_model", dl_data)
+                res_datas.append(res_data)
             elif errcode == 10211:
                 # eventdata[0] is pkgId.
                 object_model_ids = eventdata[1]
                 object_model_val = [self.__object_model.items_id[i] for i in object_model_ids if self.__object_model.items_id.get(i)]
                 res_data = ("query", object_model_val)
-                pass
+                res_datas.append(res_data)
         elif event == 7:
             if errcode == 10700:
                 if eventdata:
@@ -449,29 +417,54 @@ class QuecThing(CloudObservable):
                     log.info("OTA File Info: componentNo: %s, sourceVersion: %s, targetVersion: %s, "
                              "batteryLimit: %s, minSignalIntensity: %s, useSpace: %s" % file_info)
                     res_data = ("object_model", [("ota_status", (file_info[0], 1, file_info[2]))])
+                    res_datas.append(res_data)
+                    ota_cfg = {
+                        "componentNo": file_info[0],
+                        "sourceVersion": file_info[1],
+                        "targetVersion": file_info[2],
+                        "batteryLimit": file_info[3],
+                        "minSignalIntensity": file_info[4],
+                        "useSpace": file_info[5],
+                    }
+                    res_data = ("ota_plain", [("ota_cfg", ota_cfg)])
+                    res_datas.append(res_data)
             elif errcode == 10701:
                 res_data = ("object_model", [("ota_status", (None, 2, None))])
+                res_datas.append(res_data)
+                file_info = eval(eventdata)
+                ota_info = {
+                    "componentNo": file_info[0],
+                    "length": file_info[1],
+                    "MD5": file_info[2],
+                }
+                self.__ota.set_ota_info(ota_info["length"], ota_info["MD5"])
             elif errcode == 10702:
                 res_data = ("object_model", [("ota_status", (None, 2, None))])
+                res_datas.append(res_data)
             elif errcode == 10703:
                 res_data = ("object_model", [("ota_status", (None, 2, None))])
+                res_datas.append(res_data)
+                file_info = eval(eventdata)
+                ota_info = {
+                    "componentNo": file_info[0],
+                    "length": file_info[1],
+                    "startaddr": file_info[2],
+                    "piece_length": file_info[3],
+                }
+                self.__ota.start_ota(ota_info["startaddr"], ota_info["piece_length"])
             elif errcode == 10704:
                 res_data = ("object_model", [("ota_status", (None, 2, None))])
+                res_datas.append(res_data)
             elif errcode == 10705:
                 res_data = ("object_model", [("ota_status", (None, 3, None))])
+                res_datas.append(res_data)
             elif errcode == 10706:
                 res_data = ("object_model", [("ota_status", (None, 4, None))])
+                res_datas.append(res_data)
 
-        if res_data:
-            self.notifyObservers(self, *res_data)
-
-        if event == 7 and errcode == 10701 and eventdata:
-            file_info = eval(eventdata)
-            self.__sota_download_info(int(file_info[1]), file_info[2])
-        if event == 7 and errcode == 10703 and eventdata:
-            file_info = eval(eventdata)
-            log.info("OTA File Info: componentNo: %s, length: %s, md5: %s, crc: %s" % file_info)
-            self.__sota_upgrade_start(int(file_info[2]), int(file_info[3]))
+        if res_datas:
+            for res_data in res_datas:
+                self.notifyObservers(self, *res_data)
 
     def set_object_model(self, object_model):
         """Register QuecObjectModel to this class"""
@@ -616,3 +609,128 @@ class QuecThing(CloudObservable):
             False: Failed
         """
         return quecIot.otaAction(action) if action in (0, 1, 2, 3) else False
+
+
+class QuecOTA(object):
+
+    def __init__(self):
+        self.__ota_file = "/usr/sotaFile.tar.gz"
+        self.__updater_dir = "/usr/.updater/usr/"
+        self.__file_hash = uhashlib.md5()
+        self.__file_size = 0
+        self.__file_md5 = ""
+        self.__download_size = 0
+
+    def __write_ota_file(self, data):
+        with open(self.__ota_file, "wb+") as fp:
+            fp.write(data)
+            self.__file_hash.update(data)
+
+    def __get_file_size(self, data):
+        size = data.decode("ascii")
+        size = size.rstrip("\0")
+        if (len(size) == 0):
+            return 0
+        size = int(size, 8)
+        return size
+
+    def __get_file_name(self, name):
+        file_name = name.decode("ascii")
+        file_name = file_name.rstrip("\0")
+        return file_name
+
+    def __check_md5(self):
+        file_md5 = ubinascii.hexlify(self.__file_hash.digest()).decode("ascii")
+        log.debug("DMP Calc MD5 Value: %s, Device Calc MD5 Value: %s" % (self.__file_md5, file_md5))
+        if (self.__file_md5 != file_md5):
+            log.error("MD5 Verification Failed")
+            return False
+
+        log.debug("MD5 Verification Success.")
+        return True
+
+    def __download(self, start_addr, piece_size):
+        res = 2
+        readsize = 4096
+        while piece_size > 0:
+            readsize = readsize if readsize <= piece_size else piece_size
+            updateFile = quecIot.mcuFWDataRead(start_addr, readsize)
+            self.__write_ota_file(updateFile)
+            log.debug("Download File Size: %s" % readsize)
+            piece_size -= readsize
+            start_addr += readsize
+            self.__download_size += readsize
+            if (self.__download_size == self.__file_size):
+                log.debug("File Download Success, Update Start.")
+                res = 3
+                quecIot.otaAction(res)
+                break
+            else:
+                quecIot.otaAction(res)
+
+        return res
+
+    def __upgrade(self):
+        with open(self.__ota_file, "rb+") as ota_file:
+            ota_file.seek(10)
+            unzipFp = uzlib.DecompIO(ota_file, -15)
+            log.debug("[OTA Upgrade] Unzip file success.")
+            ql_fs.mkdirs(self.__updater_dir)
+            file_list = []
+            try:
+                while True:
+                    data = unzipFp.read(0x200)
+                    if not data:
+                        log.debug("[OTA Upgrade] Read file size zore.")
+                        break
+
+                    size = self.__get_file_size(data[124:135])
+                    file_name = self.__get_file_name(data[:100])
+                    log.debug("[OTA Upgrade] File Name: %s, File Size: %s" % (file_name, size))
+
+                    if not size:
+                        if len(file_name):
+                            log.debug("[OTA Upgrade] Create file: %s" % self.__updater_dir + file_name)
+                            ql_fs.mkdirs(self.__updater_dir + file_name)
+                        else:
+                            log.debug("[OTA Upgrade] Have no file unzip.")
+                            break
+                    else:
+                        log.debug("File %s write size %s" % (self.__updater_dir + file_name, size))
+                        with open(self.__updater_dir + file_name, "wb+") as fp:
+                            read_size = 0x200
+                            last_size = size
+                            while last_size > 0:
+                                read_size = read_size if read_size <= last_size else last_size
+                                data = unzipFp.read(read_size)
+                                fp.write(data)
+                                last_size -= read_size
+                            file_list.append({"file_name": "/usr/" + file_name, "size": size})
+
+                for file_name in file_list:
+                    app_fota_download.update_download_stat("/usr/.updater" + file_name["file_name"], file_name["file_name"], file_name["size"])
+
+                log.debug("Remove %s" % self.__ota_file)
+                uos.remove(self.__ota_file)
+
+                app_fota_download.set_update_flag()
+            except Exception as e:
+                log.error("Unpack Error: %s" % e)
+                return False
+
+        return True
+
+    def set_ota_info(self, size, md5):
+        self.__file_size = size
+        self.__file_md5 = md5
+
+    def start_ota(self, start_addr, piece_size):
+        ota_download_res = self.__download(start_addr, piece_size)
+        if ota_download_res == 3:
+            if self.__check_md5():
+                if self.__upgrade():
+                    log.debug("File Update Success, Power Restart.")
+                else:
+                    log.debug("File Update Failed, Power Restart.")
+
+        Power.powerRestart()

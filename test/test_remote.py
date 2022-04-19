@@ -109,5 +109,5 @@ def test_remote():
     print("[test_remote] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_remote()

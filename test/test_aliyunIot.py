@@ -50,12 +50,12 @@ def get_ali_loc_data(loc_method, loc_data):
 
 
 class AliCloudConfig(object):
-    PK = "a1q1kmZPwU2"
-    PS = "HQraBqtV8WsfCEuy"
-    DK = "tracker_dev_jack"
-    DS = "bfdfcca5075715e8309eff8597663c4b"
+    PK = "h3nqn03lil0"
+    PS = "UH9muaJIoAlpvnqE"
+    DK = "TrackerDevJack"
+    DS = "2980b4b86fb011375739a150c23bc252"
 
-    SERVER = "a1q1kmZPwU2.iot-as-mqtt.cn-shanghai.aliyuncs.com"
+    SERVER = "%s.iot-as-mqtt.cn-shanghai.aliyuncs.com" % PK
     client_id = ""
     life_time = 120
     burning_method = 1
@@ -104,7 +104,7 @@ def test_aliyuniot():
         "stopbits": 1,
         "flowctl": 0,
     }
-    locator_init_params = {'gps_cfg': _gps_cfg}
+    locator_init_params = {"gps_cfg": _gps_cfg}
 
     locator = Location(gps_mode, locator_init_params)
     loc_data = locator.read(loc_method)
@@ -142,5 +142,5 @@ def test_aliyuniot():
     print("[test_aliyuniot] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_aliyuniot()

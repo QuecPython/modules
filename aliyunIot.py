@@ -12,11 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import uos
+import fota
 import ujson
 import utime
+import uzlib
+import ql_fs
 import _thread
 import osTimer
+import uhashlib
+import app_fota
+import ubinascii
+import app_fota_download
 
+from misc import Power
+from queue import Queue
 from aLiYun import aLiYun
 
 from usr.modules.logging import getLogger
@@ -25,6 +35,23 @@ from usr.modules.common import numiter, option_lock, CloudObservable, CloudObjec
 log = getLogger(__name__)
 
 _gps_read_lock = _thread.allocate_lock()
+
+FOTA_ERROR_CODE = {
+    1001: "FOTA_DOMAIN_NOT_EXIST",
+    1002: "FOTA_DOMAIN_TIMEOUT",
+    1003: "FOTA_DOMAIN_UNKNOWN",
+    1004: "FOTA_SERVER_CONN_FAIL",
+    1005: "FOTA_AUTH_FAILED",
+    1006: "FOTA_FILE_NOT_EXIST",
+    1007: "FOTA_FILE_SIZE_INVALID",
+    1008: "FOTA_FILE_GET_ERR",
+    1009: "FOTA_FILE_CHECK_ERR",
+    1010: "FOTA_INTERNAL_ERR",
+    1011: "FOTA_NOT_INPROGRESS",
+    1012: "FOTA_NO_MEMORY",
+    1013: "FOTA_FILE_SIZE_TOO_LARGE",
+    1014: "FOTA_PARAM_SIZE_INVALID",
+}
 
 
 class AliObjectModel(CloudObjectModel):
@@ -173,6 +200,8 @@ class AliYunIot(CloudObservable):
         self.__id_iter = numiter()
         self.__id_lock = _thread.allocate_lock()
 
+        self.__ota = AliOTA(self.__ali, self.__mcu_name, self.__firmware_name)
+
         self.ica_topic_property_post = "/sys/%s/%s/thing/event/property/post" % (self.__pk, self.__dk)
         self.ica_topic_property_post_reply = "/sys/%s/%s/thing/event/property/post_reply" % (self.__pk, self.__dk)
         self.ica_topic_property_set = "/sys/%s/%s/thing/service/property/set" % (self.__pk, self.__dk)
@@ -287,13 +316,23 @@ class AliYunIot(CloudObservable):
             if int(data["code"]) == 1000:
                 if data.get("data"):
                     self.notifyObservers(self, *("object_model", [("ota_status", (data["data"]["module"], 1, data["data"]["version"]))]))
-                    self.notifyObservers(self, *("ota_plain", data["data"]))
+                    self.notifyObservers(self, *("ota_plain", [("ota_cfg", data["data"])]))
+                    if data["data"].get("files"):
+                        files = [{"size": i["fileSize"], "url": i["fileUrl"], "md5": i["fileMd5"]} for i in data["data"]["files"]]
+                    else:
+                        files = [{"size": data["data"]["size"], "url": data["data"]["url"], "md5": data["data"]["md5"]}]
+                    self.__ota.set_ota_info(data["data"]["module"], data["data"]["version"], files)
         elif topic.endswith("/thing/ota/firmware/get_reply"):
             self.__put_post_res(data["id"], True if int(data["code"]) == 200 else False)
             if data["code"] == 200:
                 if data.get("data"):
                     self.notifyObservers(self, *("object_model", [("ota_status", (data["data"]["module"], 1, data["data"]["version"]))]))
-                    self.notifyObservers(self, *("ota_plain", data["data"]))
+                    self.notifyObservers(self, *("ota_plain", [("ota_cfg", data["data"])]))
+                    if data["data"].get("files"):
+                        files = [{"size": i["fileSize"], "url": i["fileUrl"], "md5": i["fileMd5"]} for i in data["data"]["files"]]
+                    else:
+                        files = [{"size": data["data"]["size"], "url": data["data"]["url"], "md5": data["data"]["md5"]}]
+                    self.__ota.set_ota_info(data["data"]["module"], data["data"]["version"], files)
         # TODO: To Download OTA File For MQTT Association (Not Support Now.)
         elif topic.endswith("/thing/file/download_reply"):
             self.__put_post_res(data["id"], True if int(data["code"]) == 200 else False)
@@ -567,9 +606,13 @@ class AliYunIot(CloudObservable):
             return False
 
         if action == 1:
-            return self.ota_device_progress(step=1, module=module)
+            if self.ota_device_progress(step=1, module=module):
+                return self.__ota.start_ota()
         else:
+            self.__ota.set_ota_info("", "", [])
             return self.ota_device_progress(step=-1, desc="User cancels upgrade.", module=module)
+
+        return False
 
     def ota_device_inform(self, version, module="default"):
         """Publish device information
@@ -695,3 +738,170 @@ class AliYunIot(CloudObservable):
         else:
             log.error("ota_file_download publish_res: %s" % publish_res)
             return False
+
+
+class AliOTA(object):
+
+    def __init__(self, ali, mcu_name, firmware_name):
+        self.__files = []
+        self.__module = ""
+        self.__version = ""
+        self.__ali = ali
+        self.__mcu_name = mcu_name
+        self.__firmware_name = firmware_name
+        self.__fota_queue = Queue(maxsize=4)
+
+        self.__file_hash = None
+        self.__ota_file = "/usr/sotaFile.tar.gz"
+        self.__updater_dir = "/usr/.updater/usr/"
+        self.__ota_timer = osTimer()
+
+    def __fota_callback(self, args):
+        down_status = args[0]
+        down_process = args[1]
+        if down_status in (0, 1):
+            log.debug("DownStatus: %s [%s][%s%%]" % (down_status, "=" * down_process, down_process))
+            self.__ali.ota_device_progress(down_process, "Downloading File.", module=self.__module)
+        elif down_status == 2:
+            self.__ali.ota_device_progress(100, "Download File Over.", module=self.__module)
+            self.__fota_queue.put(True)
+        else:
+            log.error("Down Failed. Error Code [%s] %s" % (down_process, FOTA_ERROR_CODE.get(down_process, down_process)))
+            self.__ali.ota_device_progress(-2, FOTA_ERROR_CODE.get(down_process, down_process), module=self.__module)
+            self.__fota_queue.put(False)
+
+    def __ota_timer_callback(self, args):
+        self.__ali.ota_device_progress(-1, "Download File Falied.", module=self.__module)
+        self.__fota_queue.put(False)
+
+    def __get_file_size(self, data):
+        size = data.decode("ascii")
+        size = size.rstrip("\0")
+        if (len(size) == 0):
+            return 0
+        size = int(size, 8)
+        return size
+
+    def __get_file_name(self, name):
+        file_name = name.decode("ascii")
+        file_name = file_name.rstrip("\0")
+        return file_name
+
+    def __check_md5(self, cloud_md5):
+        file_md5 = ubinascii.hexlify(self.__file_hash.digest()).decode("ascii")
+        msg = "DMP Calc MD5 Value: %s, Device Calc MD5 Value: %s" % (cloud_md5, file_md5)
+        log.debug(msg)
+        if (cloud_md5 != file_md5):
+            self.__ali.ota_device_progress(-3, "MD5 Verification Failed. %s" % msg, module=self.__module)
+            log.error("MD5 Verification Failed")
+            return False
+
+        log.debug("MD5 Verification Success.")
+        return True
+
+    def __start_fota(self):
+        fota_obj = fota()
+        url1 = self.__files[0]["url"]
+        url2 = self.__files[1]["url"] if len(self.__files) > 1 else ""
+        res = fota_obj.httpDownload(url1=url1, url2=url2, callback=self.__fota_callback)
+        if res == 0:
+            self.__ota_timer.start(1000 * 3600, 0, self.__ota_timer_callback)
+            fota_res = self.__fota_queue.get()
+            self.__ota_timer.stop()
+            return fota_res
+        else:
+            self.__ali.ota_device_progress(-2, "Download File Failed.", module=self.__module)
+            return False
+
+    def __start_sota(self):
+        for file in self.__files:
+            if self.__download(file["url"]):
+                if self.__check_md5(file["md5"]):
+                    if self.__upgrade():
+                        continue
+                    else:
+                        break
+                else:
+                    break
+            else:
+                break
+
+        app_fota_download.set_update_flag()
+        Power.powerRestart()
+
+    def __download(self, url):
+        app_fota_obj = app_fota.new()
+        res = app_fota_obj.download(url, self.__ota_file)
+        if res == 0:
+            uos.rename("/usr/.updater" + self.__ota_file, self.__ota_file)
+            self.__file_hash = uhashlib.md5()
+            with open(self.__ota_file, "rb+") as fp:
+                for fpi in fp.readlines():
+                    self.__file_hash.update(fpi)
+            return True
+        else:
+            self.__ali.ota_device_progress(-2, "Download File Failed.", module=self.__module)
+            return False
+
+    def __upgrade(self):
+        with open(self.__ota_file, "rb+") as ota_file:
+            ota_file.seek(10)
+            unzipFp = uzlib.DecompIO(ota_file, -15)
+            log.debug("[OTA Upgrade] Unzip file success.")
+            ql_fs.mkdirs(self.__updater_dir)
+            file_list = []
+            try:
+                while True:
+                    data = unzipFp.read(0x200)
+                    if not data:
+                        log.debug("[OTA Upgrade] Read file size zore.")
+                        break
+
+                    size = self.__get_file_size(data[124:135])
+                    file_name = self.__get_file_name(data[:100])
+                    log.debug("[OTA Upgrade] File Name: %s, File Size: %s" % (file_name, size))
+
+                    if not size:
+                        if len(file_name):
+                            log.debug("[OTA Upgrade] Create file: %s" % self.__updater_dir + file_name)
+                            ql_fs.mkdirs(self.__updater_dir + file_name)
+                        else:
+                            log.debug("[OTA Upgrade] Have no file unzip.")
+                            break
+                    else:
+                        log.debug("File %s write size %s" % (self.__updater_dir + file_name, size))
+                        with open(self.__updater_dir + file_name, "wb+") as fp:
+                            read_size = 0x200
+                            last_size = size
+                            while last_size > 0:
+                                read_size = read_size if read_size <= last_size else last_size
+                                data = unzipFp.read(read_size)
+                                fp.write(data)
+                                last_size -= read_size
+                            file_list.append({"file_name": "/usr/" + file_name, "size": size})
+
+                for file_name in file_list:
+                    app_fota_download.update_download_stat("/usr/.updater" + file_name["file_name"], file_name["file_name"], file_name["size"])
+
+                log.debug("Remove %s" % self.__ota_file)
+                uos.remove(self.__ota_file)
+            except Exception as e:
+                err_msg = "Unpack Error: %s" % e
+                log.error()
+                self.__ali.ota_device_progress(-4, err_msg, module=self.__module)
+                return False
+
+        return True
+
+    def set_ota_info(self, module, version, files):
+        self.__module = module
+        self.__version = version
+        self.__files = files
+
+    def start_ota(self):
+        if self.__module == self.__firmware_name:
+            _thread.start_new_thread(self.__start_fota, ())
+        elif self.__module == self.__mcu_name:
+            _thread.start_new_thread(self.__start_sota, ())
+
+        return True
