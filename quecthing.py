@@ -491,7 +491,7 @@ class QuecThing(CloudObservable):
         )
         log.debug("[init start] PK: %s, PS: %s, DK: %s, DS: %s, SERVER: %s" % (self.__pk, self.__ps, self.__dk, self.__ds, self.__server))
         if enforce is False:
-            if quecIot.getWorkState() == 8 and quecIot.getConnmode() == 1:
+            if self.get_status():
                 return True
 
         quecIot.init()
@@ -521,7 +521,7 @@ class QuecThing(CloudObservable):
                 utime.sleep(count)
 
         log.debug("[init over] QuecThing Work State: %s, quecIot.getConnmode(): %s" % (quecIot.getWorkState(), quecIot.getConnmode()))
-        if quecIot.getWorkState() == 8 and quecIot.getConnmode() == 1:
+        if self.get_status():
             return True
         else:
             return False
@@ -529,6 +529,15 @@ class QuecThing(CloudObservable):
     def close(self):
         """queccloud disconnect"""
         return quecIot.setConnmode(0)
+
+    def get_status(self):
+        """Get quectel cloud connect status
+
+        Return:
+            True -- connect success
+           False -- connect falied
+        """
+        return True if quecIot.getWorkState() == 8 and quecIot.getConnmode() == 1 else False
 
     def post_data(self, data):
         """Publish object model property, event

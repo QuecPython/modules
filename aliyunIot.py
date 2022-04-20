@@ -172,7 +172,7 @@ class AliYunIot(CloudObservable):
     """
 
     def __init__(self, pk, ps, dk, ds, server, client_id, burning_method=0, life_time=120,
-                 mcu_name="", mcu_version="", firmware_name="", firmware_version=""):
+                 mcu_name="", mcu_version="", firmware_name="", firmware_version="", reconn=True):
         """
         1. Init parent class CloudObservable
         2. Init cloud connect params and topic
@@ -189,6 +189,7 @@ class AliYunIot(CloudObservable):
         self.__mcu_version = mcu_version
         self.__firmware_name = firmware_name
         self.__firmware_version = firmware_version
+        self.__reconn = reconn
         self.__object_model = None
         self.__client_id = client_id
 
@@ -476,9 +477,12 @@ class AliYunIot(CloudObservable):
         """
         log.debug("[init start] enforce: %s" % enforce)
         if enforce is False and self.__ali is not None:
-            log.debug("self.__ali.getAliyunSta(): %s" % self.__ali.getAliyunSta())
-            if self.__ali.getAliyunSta() == 0:
+            log.debug("self.get_status(): %s" % self.get_status())
+            if self.get_status():
                 return True
+
+        if self.__ali is not None:
+            self.close()
 
         if self.__burning_method == 0:
             self.__dk = None
@@ -487,6 +491,7 @@ class AliYunIot(CloudObservable):
 
         log.debug("aLiYun init. self.__pk: %s, self.__ps: %s, self.__dk: %s, self.__ds: %s, self.__server: %s" % (self.__pk, self.__ps, self.__dk, self.__ds, self.__server))
         self.__ali = aLiYun(self.__pk, self.__ps, self.__dk, self.__ds, self.__server)
+        log.debug("init self.__ali: %s" % self.__ali)
         log.debug("aLiYun setMqtt.")
         setMqttres = self.__ali.setMqtt(self.__client_id, clean_session=False, keepAlive=self.__life_time, reconn=True)
         log.debug("aLiYun setMqttres: %s" % setMqttres)
@@ -496,18 +501,36 @@ class AliYunIot(CloudObservable):
             self.__ali.start()
         else:
             log.error("setMqtt Falied!")
+            del self.__ali
+            self.__ali = None
             return False
 
-        log.debug("self.__ali.getAliyunSta(): %s" % self.__ali.getAliyunSta())
-        if self.__ali.getAliyunSta() == 0:
+        log.debug("self.get_status(): %s" % self.get_status())
+        if self.get_status():
             return True
         else:
             return False
 
     def close(self):
         """Aliyun disconnect"""
-        self.__ali.disconnect()
+        try:
+            self.__ali.disconnect()
+        except:
+            pass
         return True
+
+    def get_status(self):
+        """Get aliyun connect status
+
+        Return:
+            True -- connect success
+           False -- connect falied
+        """
+        log.debug("get_status self.__ali: %s" % self.__ali)
+        try:
+            return True if self.__ali.getAliyunSta() == 0 else False
+        except:
+            return False
 
     def post_data(self, data):
         """Publish object model property, event
@@ -529,19 +552,18 @@ class AliYunIot(CloudObservable):
             Ture: Success
             False: Failed
         """
-        if self.__ali.getAliyunSta() == 0:
-            try:
-                publish_data = self.__data_format(data)
-                # Publish Property Data.
-                for item in publish_data["property"]:
-                    self.__ali.publish(self.ica_topic_property_post, ujson.dumps(item), qos=0)
-                # Publish Event Data.
-                for item in publish_data["event"]:
-                    self.__ali.publish(publish_data["event_topic"][item["id"]], ujson.dumps(item), qos=0)
-                pub_res = [self.__get_post_res(msg_id) for msg_id in publish_data["msg_ids"]]
-                return True if False not in pub_res else False
-            except Exception:
-                log.error("AliYun publish topic %s failed. data: %s" % (data.get("topic"), data.get("data")))
+        try:
+            publish_data = self.__data_format(data)
+            # Publish Property Data.
+            for item in publish_data["property"]:
+                self.__ali.publish(self.ica_topic_property_post, ujson.dumps(item), qos=0)
+            # Publish Event Data.
+            for item in publish_data["event"]:
+                self.__ali.publish(publish_data["event_topic"][item["id"]], ujson.dumps(item), qos=0)
+            pub_res = [self.__get_post_res(msg_id) for msg_id in publish_data["msg_ids"]]
+            return True if False not in pub_res else False
+        except Exception:
+            log.error("AliYun publish topic %s failed. data: %s" % (data.get("topic"), data.get("data")))
 
         return False
 
