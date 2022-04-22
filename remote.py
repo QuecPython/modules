@@ -104,6 +104,9 @@ class RemotePublish(Observable):
     def cloud_ota_action(self, action=1, module=None):
         return self.__cloud.ota_action(action, module) if self.__cloud else False
 
+    def cloud_device_report(self):
+        return self.__cloud.device_report() if self.__cloud else False
+
     def post_data(self, data):
         """
         Data format to post:

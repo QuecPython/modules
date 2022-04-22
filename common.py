@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import uos
 import _thread
 
 LOWENERGYMAP = {
@@ -159,7 +160,7 @@ class CloudObservable(Singleton):
         pass
 
 
-class CloudObjectModel(Singleton):
+class OldCloudObjectModel(Singleton):
     """This is a cloud object model base class
 
     Attribute:
@@ -274,3 +275,23 @@ class CloudObjectModel(Singleton):
                 }
                 return True
         return False
+
+
+class CloudObjectModel(Singleton):
+
+    def __init__(self, om_file):
+        self.om_file = om_file
+        if self.__file_exist(self.om_file) is False:
+            raise TypeError("File %s is not exists!" % self.om_file)
+        self.events = type("events", (object,), {})
+        self.properties = type("properties", (object,), {})
+
+    def __file_exist(self):
+        try:
+            uos.stat(self.om_file)
+            return True
+        except:
+            return False
+
+    def init(self):
+        pass

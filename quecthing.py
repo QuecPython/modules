@@ -145,7 +145,59 @@ class QuecObjectModel(CloudObjectModel):
     def __init__(self, om_file="/usr/quec_object_model.json"):
         super().__init__(om_file)
         self.items_id = {}
+        self.code_id = {}
+        self.id_code = {}
+        self.struct_code_id = {}
         self.init()
+
+    def __init_value(self, om_type):
+        if om_type in ("int", "enum", "date"):
+            om_value = 0
+        elif om_type in ("float", "double"):
+            om_value = 0.0
+        elif om_type == "bool":
+            om_value = True
+        elif om_type == "text":
+            om_value = ""
+        elif om_type == "array":
+            om_value = []
+        elif om_type == "struct":
+            om_value = {}
+        else:
+            om_value = None
+        return om_value
+
+    def __get_property(self, om_item):
+        om_item_key = om_item["code"]
+        om_item_type = om_item["dataType"].lower()
+        om_item_val = self.__init_value(om_item_type)
+        self.id_code[om_item["id"]] = om_item["code"]
+        self.code_id[om_item["code"]] = om_item["id"]
+        if om_item_type == "struct":
+            om_item_struct = om_item["specs"]
+            om_item_val = {i["code"]: self.__init_value(i["dataType"].lower()) for i in om_item_struct}
+            self.struct_code_id[om_item["code"]] = {i["code"]: i["id"] for i in om_item_struct}
+        return om_item_key, om_item_val
+
+    def __init_properties(self, om_properties):
+        for om_property in om_properties:
+            om_property_key, om_property_val = self.__get_property(om_property)
+            setattr(self.properties, om_property_key, {om_property_key: om_property_val})
+
+    def __init_events(self, om_events):
+        for om_event in om_events:
+            om_event_key = om_event["code"]
+            om_event_out_put = om_event.get("outputData", [])
+            om_event_val = {}
+            self.id_code[om_event["id"]] = om_event["code"]
+            self.code_id[om_event["code"]] = om_event["id"]
+            if om_event_out_put:
+                for om_property in om_event_out_put:
+                    property_id = int(om_property.get("$ref", "").split("/")[-1])
+                    om_property_key = self.id_code.get(property_id)
+                    om_property_val = getattr(self.properties, om_property_key)
+                    om_property_val.update(om_property_val)
+            setattr(self.events, om_event_key, {om_event_key: om_event_val})
 
     def init(self):
         with open(self.om_file, "rb") as f:
@@ -342,22 +394,31 @@ class QuecThing(CloudObservable):
         # log.debug("k: %s, v: %s" % (k, v))
         k_id = None
         struct_info = {}
-        if self.__object_model.items["events"].get(k):
-            k_id = self.__object_model.items["events"][k]["id"]
-            if isinstance(self.__object_model.items["events"][k]["struct_info"], dict):
-                struct_info = self.__object_model.items["events"][k]["struct_info"]
-        elif self.__object_model.items["properties"].get(k):
-            k_id = self.__object_model.items["properties"][k]["id"]
-            if isinstance(self.__object_model.items["properties"][k]["struct_info"], dict):
-                struct_info = self.__object_model.items["properties"][k]["struct_info"]
+        if hasattr(self.__object_model.properties, k):
+            k_id = self.__object_model.code_id[k]
+            if self.__object_model.struct_code_id.get(k):
+                struct_info = self.__object_model.struct_code_id.get(k)
+        elif hasattr(self.__object_model.events, k):
+            k_id = self.__object_model.code_id[k]
+            event_struct_info = hasattr(self.__object_model.events, k)
+            for i in event_struct_info:
+                if isinstance(getattr(self.__object_model.properties, i), dict):
+                    struct_info[i] = self.__object_model.struct_code_id(i)
+                else:
+                    struct_info[i] = self.__object_model.code_id[i]
         else:
             return False
 
         if isinstance(v, dict):
             nv = {}
             for ik, iv in v.items():
-                if struct_info.get(ik):
-                    nv[struct_info[ik]["id"]] = iv
+                if isinstance(struct_info.get(ik), int):
+                    nv[struct_info[ik]] = iv
+                elif isinstance(struct_info.get(ik), dict):
+                    if isinstance(iv, dict):
+                        nv[self.__object_model.code_id[ik]] = {struct_info[ik][ivk]: ivv for ivk, ivv in iv.items()}
+                    else:
+                        nv[self.__object_model.code_id[ik]] = iv
                 else:
                     nv[ik] = iv
             v = nv
@@ -401,13 +462,13 @@ class QuecThing(CloudObservable):
                 res_data = ("raw_data", eventdata)
                 res_datas.append(res_data)
             elif errcode == 10210:
-                dl_data = [(self.__object_model.items_id[k], v.decode() if isinstance(v, bytes) else v) for k, v in eventdata.items()]
+                dl_data = [(self.__object_model.id_code[k], v.decode() if isinstance(v, bytes) else v) for k, v in eventdata.items()]
                 res_data = ("object_model", dl_data)
                 res_datas.append(res_data)
             elif errcode == 10211:
                 # eventdata[0] is pkgId.
                 object_model_ids = eventdata[1]
-                object_model_val = [self.__object_model.items_id[i] for i in object_model_ids if self.__object_model.items_id.get(i)]
+                object_model_val = [self.__object_model.id_code[i] for i in object_model_ids if self.__object_model.id_code.get(i)]
                 res_data = ("query", object_model_val)
                 res_datas.append(res_data)
         elif event == 7:
@@ -593,6 +654,9 @@ class QuecThing(CloudObservable):
 
         self.__rm_empty_data(data)
         return res
+
+    def device_report(self):
+        return quecIot.devInfoReport([i for i in range(1, 13)])
 
     def ota_request(self, mp_mode=0):
         """Publish mcu and firmware ota plain request

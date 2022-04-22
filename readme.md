@@ -4,7 +4,13 @@
 
 ### 说明
 
+该模块主要用于提供阿里云物联网模块，MQTT协议的消息发布与订阅。
+
 ### API
+
+#### AliYunIot
+
+#### AliObjectModel
 
 ## battery -- 设备电池模块
 
