@@ -35,6 +35,7 @@ class RemoteSubscribe(CloudObserver):
         return self.__executor.event_option(*args, **kwargs) if self.__executor else False
 
     def object_model(self, *args, **kwargs):
+        log.debug("object_model args: %s, kwargs: %s" % (str(args), str(kwargs)))
         return self.__executor.event_done(*args, **kwargs) if self.__executor else False
 
     def query(self, *args, **kwargs):

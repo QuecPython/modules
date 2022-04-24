@@ -280,34 +280,33 @@ class AliYunIot(CloudObservable):
         res = self.__post_res.pop(msg_id)
         return res
 
+    def __subscribe_topic(self, topic, qos=0):
+        subscribe_res = self.__ali.subscribe(topic, qos=0)
+        if subscribe_res == -1:
+            raise TypeError("AliYun subscribe topic %s falied" % topic)
+
     def __ali_subscribe_topic(self):
         """Subscribe aliyun topic"""
-        if self.__ali.subscribe(self.ica_topic_property_post, qos=0) == -1:
-            log.error("Topic [%s] Subscribe Falied." % self.ica_topic_property_post)
-        if self.__ali.subscribe(self.ica_topic_property_post_reply, qos=0) == -1:
-            log.error("Topic [%s] Subscribe Falied." % self.ica_topic_property_post_reply)
-        if self.__ali.subscribe(self.ica_topic_property_set, qos=0) == -1:
-            log.error("Topic [%s] Subscribe Falied." % self.ica_topic_property_set)
-        for tsl_event_identifier in self.__object_model.events.__dict__.keys():
-            post_topic = self.ica_topic_event_post.format(tsl_event_identifier)
-            if self.__ali.subscribe(post_topic, qos=0) == -1:
-                log.error("Topic [%s] Subscribe Falied." % post_topic)
+        try:
+            self.__subscribe_topic(self.ica_topic_property_post)
+            self.__subscribe_topic(self.ica_topic_property_post_reply)
+            self.__subscribe_topic(self.ica_topic_property_set)
+            self.__subscribe_topic(self.ota_topic_device_upgrade)
+            self.__subscribe_topic(self.ota_topic_firmware_get_reply)
+            self.__subscribe_topic(self.rrpc_topic_request)
 
-            post_reply_topic = self.ica_topic_event_post_reply.format(tsl_event_identifier)
-            if self.__ali.subscribe(post_reply_topic, qos=0) == -1:
-                log.error("Topic [%s] Subscribe Falied." % post_reply_topic)
+            for tsl_event_identifier in self.__object_model.events.__dict__.keys():
+                post_topic = self.ica_topic_event_post.format(tsl_event_identifier)
+                self.__subscribe_topic(post_topic)
+                post_reply_topic = self.ica_topic_event_post_reply.format(tsl_event_identifier)
+                self.__subscribe_topic(post_reply_topic)
 
-        if self.__ali.subscribe(self.ota_topic_device_upgrade, qos=0) == -1:
-            log.error("Topic [%s] Subscribe Falied." % self.ota_topic_device_upgrade)
-        if self.__ali.subscribe(self.ota_topic_firmware_get_reply, qos=0) == -1:
-            log.error("Topic [%s] Subscribe Falied." % self.ota_topic_firmware_get_reply)
-
-        # TODO: To Download OTA File For MQTT Association (Not Support Now.)
-        if self.__ali.subscribe(self.ota_topic_file_download_reply, qos=0) == -1:
-            log.error("Topic [%s] Subscribe Falied." % self.ota_topic_file_download_reply)
-
-        if self.__ali.subscribe(self.rrpc_topic_request, qos=0) == -1:
-            log.error("Topic [%s] Subscribe Falied." % self.rrpc_topic_request)
+            # TODO: To Download OTA File For MQTT Association (Not Support Now.)
+            self.__subscribe_topic(self.ota_topic_file_download_reply)
+            return True
+        except Exception as e:
+            log.error(e)
+            return False
 
     def __ali_sub_cb(self, topic, data):
         """Aliyun subscribe topic callback
@@ -502,13 +501,18 @@ class AliYunIot(CloudObservable):
         if setMqttres != -1:
             setCallbackres = self.__ali.setCallback(self.__ali_sub_cb)
             log.debug("aLiYun setCallback: %s" % setCallbackres)
-            self.__ali_subscribe_topic()
-            log.debug("aLiYun __ali_subscribe_topic")
-            self.__ali.start()
-            log.debug("aLiYun start.")
+            subs_res = self.__ali_subscribe_topic()
+            log.debug("aLiYun __ali_subscribe_topic subs_res: %s" % subs_res)
+            if subs_res is True:
+                self.__ali.start()
+                log.debug("aLiYun start.")
+            else:
+                self.close()
+                log.debug("aLiYun disconnect.")
+                self.__ali = None
+                return False
         else:
             log.error("setMqtt Falied!")
-            del self.__ali
             self.__ali = None
             return False
 

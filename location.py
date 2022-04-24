@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import ure
+import math
 import osTimer
 import _thread
 import cellLocator
@@ -33,6 +34,10 @@ log = getLogger(__name__)
 
 _gps_read_lock = _thread.allocate_lock()
 
+EE = 0.00669342162296594323
+EARTH_RADIUS = 6378.137  # Approximate Earth Radius(km)
+M_PI = math.pi
+
 
 class _loc_method(object):
     gps = 0x1
@@ -44,6 +49,38 @@ class _gps_mode(object):
     none = 0x0
     internal = 0x1
     external = 0x2
+
+
+def transformLat(x, y):
+    ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * math.sqrt(math.fabs(x));
+    ret += (20.0 * math.sin(6.0 * x * M_PI) + 20.0 * math.sin(2.0 * x * M_PI)) * 2.0 / 3.0;
+    ret += (20.0 * math.sin(y * M_PI) + 40.0 * math.sin(y / 3.0 * M_PI)) * 2.0 / 3.0;
+    ret += (160.0 * math.sin(y / 12.0 * M_PI) + 320 * math.sin(y * M_PI / 30.0)) * 2.0 / 3.0;
+    return ret;
+
+
+def transformLon(x, y):
+    ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * math.sqrt(math.fabs(x));
+    ret += (20.0 * math.sin(6.0 * x * M_PI) + 20.0 * math.sin(2.0 * x * M_PI)) * 2.0 / 3.0;
+    ret += (20.0 * math.sin(x * M_PI) + 40.0 * math.sin(x / 3.0 * M_PI)) * 2.0 / 3.0;
+    ret += (150.0 * math.sin(x / 12.0 * M_PI) + 300.0 * math.sin(x / 30.0 * M_PI)) * 2.0 / 3.0;
+    return ret;
+
+
+def WGS84ToGCJ02(lon, lat):
+    dLat = transformLat(lon - 105.0, lat - 35.0);
+    dLon = transformLon(lon - 105.0, lat - 35.0);
+    radLat = lat / 180.0 * M_PI;
+    magic = math.sin(radLat);
+    magic = 1 - magic * magic * EE;
+    sqrtMagic = math.sqrt(magic);
+
+    dLat = (dLat * 180.0) / ((EARTH_RADIUS * 1000 * (1 - EE)) / (magic * sqrtMagic) * M_PI);
+    dLon = (dLon * 180.0) / (EARTH_RADIUS * 1000 / sqrtMagic * math.cos(radLat) * M_PI);
+    lon02 = lon + dLon;
+    lat02 = lat + dLat;
+
+    return lon02, lat02
 
 
 class GPSMatch(object):
@@ -118,7 +155,8 @@ class GPSParse(object):
         if gga_data:
             latitude_re = ure.search(r",[0-9]+\.[0-9]+,[NS],", gga_data)
             if latitude_re:
-                return latitude_re.group(0)[1:-3]
+                latitude = latitude_re.group(0)[1:-3]
+                return str(float(latitude[:2]) + float(latitude[2:]) / 60)
         return ""
 
     def GxGGA_longtitude(self, gga_data):
@@ -126,7 +164,8 @@ class GPSParse(object):
         if gga_data:
             longtitude_re = ure.search(r",[0-9]+\.[0-9]+,[EW],", gga_data)
             if longtitude_re:
-                return longtitude_re.group(0)[1:-3]
+                longtitude = longtitude_re.group(0)[1:-3]
+                return str(float(longtitude[:3]) + float(longtitude[3:]) / 60)
         return ""
 
     def GxGGA_altitude(self, gga_data):
@@ -218,7 +257,7 @@ class GPS(Singleton):
         """
         toRead = args[2]
         log.debug("GPS __external_retrieve_cb args: %s" % str(args))
-        if toRead:
+        if toRead > 0 and toRead < 10240:
             if self.__external_retrieve_queue.size() >= 8:
                 self.__external_retrieve_queue.get()
             self.__external_retrieve_queue.put(toRead)
@@ -280,6 +319,7 @@ class GPS(Singleton):
         self.__vtg_data = ""
         self.__gsv_data = ""
         self.__gps_clean_timer.start(1050, 1, self.__gps_clean_callback)
+        cycle = 10
         while self.__break == 0:
             self.__gps_timer.start(1500, 0, self.__gps_timer_callback)
             nread = self.__external_retrieve_queue.get()
@@ -297,6 +337,11 @@ class GPS(Singleton):
                 if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
                     self.__break = 1
             self.__gps_timer.stop()
+            cycle -= 1
+            if cycle <= 0:
+                if self.__break != 1:
+                    self.__gps_data = ""
+                break
         self.__gps_clean_timer.stop()
         self.__break = 0
 
@@ -339,6 +384,7 @@ class GPS(Singleton):
         self.__vtg_data = ""
         self.__gsv_data = ""
         self.__gps_clean_timer.start(1050, 1, self.__gps_clean_callback)
+        cycle = 10
         while self.__break == 0:
             self.__gps_timer.start(1500, 0, self.__gps_timer_callback)
             gnss_data = quecgnss.read(1024)
@@ -355,6 +401,11 @@ class GPS(Singleton):
                 if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
                     self.__break = 1
             self.__gps_timer.stop()
+            cycle -= 1
+            if cycle <= 0:
+                if self.__break != 1:
+                    self.__gps_data = ""
+                break
         self.__gps_clean_timer.stop()
         self.__break = 0
 
@@ -406,6 +457,26 @@ class GPS(Singleton):
         """Read altitude from gps data"""
         return self.__gps_parse.GxGGA_altitude(self.__gps_match.GxGGA(gps_data))
 
+    def read_coordinates(self, gps_data, map_coordinate_system="WGS84"):
+        """Read positioning coordinates.
+
+        Params:
+            gps_data: read gps data.
+            map_coordinate_system: `WGS84` or GCJ02
+
+        Return:
+            (longtitude, latitude, altitude)
+        """
+        latitude = self.read_latitude(gps_data)
+        latitude = float(latitude) if latitude else latitude
+        longtitude = self.read_longtitude(gps_data)
+        longtitude = float(longtitude) if longtitude else longtitude
+        altitude = self.read_altitude(gps_data)
+        altitude = float(altitude) if altitude else altitude
+        if map_coordinate_system == "GCJ02":
+            longtitude, latitude = WGS84ToGCJ02(longtitude, latitude)
+        return (longtitude, latitude, altitude)
+
     def on(self):
         """GPS Module switch on"""
         # TODO: Set GPS ON
@@ -423,7 +494,7 @@ class CellLocator(object):
     def __init__(self, cell_cfg):
         self.cell_cfg = cell_cfg
 
-    def read(self):
+    def read(self, map_coordinate_system="WGS84"):
         """Read cell location data.
 
         Return: (res_code, loc_data)
@@ -448,6 +519,9 @@ class CellLocator(object):
         )
         if isinstance(loc_data, tuple) and len(loc_data) == 3:
             res = 0
+            if map_coordinate_system == "GCJ02":
+                lon, lat = WGS84ToGCJ02(loc_data[0], loc_data[1])
+                loc_data = (lon, lat, loc_data[2])
         else:
             res = loc_data
             loc_data = ()
@@ -461,7 +535,7 @@ class WiFiLocator(object):
     def __init__(self, wifi_cfg):
         self.wifilocator_obj = wifilocator(wifi_cfg["token"])
 
-    def read(self):
+    def read(self, map_coordinate_system="WGS84"):
         """Read wifi location data.
 
         Return: (res_code, loc_data)
@@ -477,6 +551,9 @@ class WiFiLocator(object):
         loc_data = self.wifilocator_obj.getwifilocator()
         if isinstance(loc_data, tuple) and len(loc_data) == 3:
             res = 0
+            if map_coordinate_system == "GCJ02":
+                lon, lat = WGS84ToGCJ02(loc_data[0], loc_data[1])
+                loc_data = (lon, lat, loc_data[2])
         else:
             res = loc_data
             loc_data = ()
@@ -615,3 +692,6 @@ class Location(Singleton):
             loc_data[_loc_method.wifi] = self.__read_wifi()
 
         return loc_data
+
+    def wgs84togcj02(self, Longtitude, Latitude):
+        return WGS84ToGCJ02(Longtitude, Latitude)
