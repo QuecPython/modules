@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from misc import Power
-from usr.modules.logging import getLogger
+import utime
+from misc import Power, ADC
+from machine import Pin, ExtInt
+from usr.logging import getLogger
 
 log = getLogger(__name__)
 
@@ -39,10 +41,71 @@ class Battery(object):
     """This class is for battery info.
 
     This class can get battery voltage and energy.
+    if adc_args is not None, use cbc to read battery
+
+    adc_args: (adc_num, adc_period, factor)
+
+        adc_num: ADC channel num
+        adc_period: Cyclic read ADC cycle period
+        factor: calculation coefficient
     """
-    def __init__(self):
+    def __init__(self, adc_args=None, chrg_gpion=None, stdby_gpion=None):
         self.__energy = 100
         self.__temp = 20
+
+        # ADC params
+        self.__adc = None
+        if adc_args:
+            self.__adc_num, self.__adc_period, self.__factor = adc_args
+            if not isinstance(self.__adc_num, int):
+                raise TypeError("adc_args adc_num is not int number.")
+            if not isinstance(self.__adc_period, int):
+                raise TypeError("adc_args adc_period is not int number.")
+            if not isinstance(self.__factor, float):
+                raise TypeError("adc_args factor is not int float.")
+            self.__adc = ADC()
+
+        # Charge params
+        self.__charge_callback = None
+        self.__charge_status = None
+        self.__chrg_gpion = chrg_gpion
+        self.__stdby_gpion = stdby_gpion
+        self.__chrg_gpio = None
+        self.__stdby_gpio = None
+        self.__chrg_exint = None
+        self.__stdby_exint = None
+        if self.__chrg_gpion is not None and self.__stdby_gpion is not None:
+            self.__init_charge()
+
+    def __chrg_callback(self, args):
+        self.__get_charge_status()
+        if self.__charge_callback is not None:
+            self.__charge_callback(("CHRG", args))
+
+    def __stdby_callback(self, args):
+        self.__get_charge_status()
+        if self.__charge_callback is not None:
+            self.__charge_callback(("STDBY", args))
+
+    def __get_charge_status(self):
+        if self.__chrg_gpio.read() == 1 and self.__stdby_gpio.read() == 1:
+            self.__charge_status = 0
+        elif self.__chrg_gpio.read() == 0 and self.__stdby_gpio.read() == 1:
+            self.__charge_status = 1
+        elif self.__chrg_gpio.read() == 1 and self.__stdby_gpio.read() == 0:
+            self.__charge_status = 2
+        else:
+            raise TypeError("CHRG and STDBY cannot be 0 at the same time!")
+        return self.__charge_status
+
+    def __init_charge(self):
+        self.__chrg_gpio = Pin(self.__chrg_gpion, Pin.IN, Pin.PULL_DISABLE)
+        self.__stdby_gpio = Pin(self.__stdby_gpion, Pin.IN, Pin.PULL_DISABLE)
+        self.__chrg_exint = ExtInt(self.__chrg_gpion, ExtInt.IRQ_RISING_FALLING, ExtInt.PULL_PU, self.__chrg_callback)
+        self.__stdby_exint = ExtInt(self.__stdby_gpion, ExtInt.IRQ_RISING_FALLING, ExtInt.PULL_PU, self.__stdby_callback)
+        self.__chrg_exint.enable()
+        self.__stdby_exint.enable()
+        self.__get_charge_status()
 
     def __get_soc_from_dict(self, key, volt_arg):
         """Get battery energy from map"""
@@ -75,6 +138,23 @@ class Battery(object):
             else:
                 return self.__get_soc_from_dict(20, volt_arg)
 
+    def __get_power_vbatt(self):
+        return int(sum([Power.getVbatt() for i in range(100)]) / 100)
+
+    def __get_adc_vbatt(self):
+        self.__adc.open()
+        utime.sleep_ms(self.__adc_period)
+        adc_list = list()
+        for i in range(self.__adc_period):
+            adc_list.append(self.__adc.read(self.__adc_num))
+            utime.sleep_ms(self.__adc_period)
+        adc_list.remove(min(adc_list))
+        adc_list.remove(max(adc_list))
+        adc_value = int(sum(adc_list) / len(adc_list))
+        self.__adc.close()
+        vbatt_value = adc_value * (self.__factor + 1)
+        return vbatt_value
+
     def set_temp(self, temp):
         """Set now temperature."""
         if isinstance(temp, int) or isinstance(temp, float):
@@ -84,11 +164,22 @@ class Battery(object):
 
     def get_voltage(self):
         """Get battery voltage"""
-        # Get voltage from vbat
-        # TODO: Get voltage by ADC
-        return int(sum([Power.getVbatt() for i in range(100)]) / 100)
+        if self.__adc is not None:
+            return self.__get_power_vbatt()
+        else:
+            return self.__get_adc_vbatt()
 
     def get_energy(self):
         """Get battery energy"""
         self.__energy = self.__get_soc(self.__temp, self.get_voltage())
         return self.__energy
+
+    def set_charge_callback(self, charge_callback):
+        if self.__chrg_gpion is not None and self.__stdby_gpion is not None:
+            if callable(charge_callback):
+                self.__charge_callback = charge_callback
+                return True
+        return False
+
+    def get_charge_status(self):
+        return self.__get_charge_status()

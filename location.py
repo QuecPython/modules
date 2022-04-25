@@ -266,14 +266,14 @@ class GPS(Singleton):
         """Internal GPS init"""
         if self.__internal_obj:
             if self.__internal_obj.init() != 0:
-                self.__insternal_open()
+                self.__internal_open()
                 log.error("GNSS INIT Failed.")
             else:
                 log.debug("GNSS INIT Success.")
         else:
             log.error("Module quecgnss Import Error.")
 
-    def __insternal_open(self):
+    def __internal_open(self):
         """Internal GPS enable"""
         if self.__internal_obj.get_state() == 0:
             self.__internal_obj.gnssEnable(1)
