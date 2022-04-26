@@ -344,7 +344,8 @@ class AliYunIot(CloudObservable):
             if data["code"] == 200:
                 self.notifyObservers(self, *("ota_file_download", data["data"]))
         elif topic.find("/rrpc/request/") != -1:
-            self.notifyObservers(self, *("rrpc_request", topic, data))
+            message_id = topic.split("/")[-1]
+            self.notifyObservers(self, *("rrpc_request", {"message_id": message_id, "data": data}))
         else:
             pass
 
@@ -526,8 +527,8 @@ class AliYunIot(CloudObservable):
         """Aliyun disconnect"""
         try:
             self.__ali.disconnect()
-        except:
-            pass
+        except Exception as e:
+            log.error("Ali disconnect falied. %s" % e)
         return True
 
     def get_status(self):

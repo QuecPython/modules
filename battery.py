@@ -15,7 +15,7 @@
 import utime
 from misc import Power, ADC
 from machine import Pin, ExtInt
-from usr.logging import getLogger
+from usr.modules.logging import getLogger
 
 log = getLogger(__name__)
 
@@ -163,7 +163,7 @@ class Battery(object):
 
     def get_voltage(self):
         """Get battery voltage"""
-        if self.__adc is not None:
+        if self.__adc is None:
             return self.__get_power_vbatt()
         else:
             return self.__get_adc_vbatt()

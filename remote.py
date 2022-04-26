@@ -52,6 +52,15 @@ class RemoteSubscribe(CloudObserver):
         else:
             return False
 
+    def rrpc_request(self, *args, **kwargs):
+        """RRPC request
+
+        kwargs:
+            message_id: rrpc topic message id
+            data: rrpc request body
+        """
+        return self.__executor.event_rrpc_request(*args, **kwargs) if self.__executor else False
+
     def execute(self, observable, *args, **kwargs):
         """
         1. observable: Cloud Iot Object.
@@ -107,6 +116,9 @@ class RemotePublish(Observable):
 
     def cloud_device_report(self):
         return self.__cloud.device_report() if self.__cloud else False
+
+    def cloud_rrpc_response(self, message_id, data):
+        return self.__cloud.rrpc_response(message_id, data) if self.__cloud else False
 
     def post_data(self, data):
         """
