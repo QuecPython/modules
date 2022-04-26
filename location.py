@@ -183,7 +183,7 @@ class GPS(Singleton):
     Now support external gps and internal gps.
     """
 
-    def __init__(self, gps_cfg, gps_mode):
+    def __init__(self, gps_cfg, gps_mode, retry=100):
         """ Init gps params
 
         Parameter:
@@ -193,6 +193,7 @@ class GPS(Singleton):
         """
         self.__gps_cfg = gps_cfg
         self.__gps_mode = gps_mode
+        self.__retry = retry
         self.__external_obj = None
         self.__internal_obj = quecgnss
         self.__gps_match = GPSMatch()
@@ -319,13 +320,14 @@ class GPS(Singleton):
         self.__vtg_data = ""
         self.__gsv_data = ""
         self.__gps_clean_timer.start(1050, 1, self.__gps_clean_callback)
-        cycle = 10
+        cycle = 0
         while self.__break == 0:
             self.__gps_timer.start(1500, 0, self.__gps_timer_callback)
             nread = self.__external_retrieve_queue.get()
             log.debug("[second] nread: %s" % nread)
             if nread:
                 self.__gps_data += self.__external_obj.read(nread).decode()
+                log.debug("__gps_data: %s" % self.__gps_data)
                 if not self.__rmc_data:
                     self.__rmc_data = self.__gps_match.GxRMC(self.__gps_data)
                 if not self.__gga_data:
@@ -337,8 +339,8 @@ class GPS(Singleton):
                 if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
                     self.__break = 1
             self.__gps_timer.stop()
-            cycle -= 1
-            if cycle <= 0:
+            cycle += 1
+            if cycle >= self.__retry:
                 if self.__break != 1:
                     self.__gps_data = ""
                 break
@@ -384,7 +386,7 @@ class GPS(Singleton):
         self.__vtg_data = ""
         self.__gsv_data = ""
         self.__gps_clean_timer.start(1050, 1, self.__gps_clean_callback)
-        cycle = 10
+        cycle = 0
         while self.__break == 0:
             self.__gps_timer.start(1500, 0, self.__gps_timer_callback)
             gnss_data = quecgnss.read(1024)
@@ -401,8 +403,8 @@ class GPS(Singleton):
                 if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
                     self.__break = 1
             self.__gps_timer.stop()
-            cycle -= 1
-            if cycle <= 0:
+            cycle += 1
+            if cycle >= self.__retry:
                 if self.__break != 1:
                     self.__gps_data = ""
                 break

@@ -1,3 +1,4 @@
+import utime
 import osTimer
 from machine import UART
 from usr.modules.location import Location
@@ -6,6 +7,7 @@ from usr.modules.location import GPS
 _gps_cfg = {
     "UARTn": UART.UART1,
     "buadrate": 115200,
+    # "buadrate": 9600,
     "databits": 8,
     "parity": 0,
     "stopbits": 1,
@@ -69,6 +71,7 @@ def test_gps():
         print("gps.read(): %s" % str(res))
         if res[0] == 0:
             break
+        utime.sleep_ms(500)
     gps_timer.stop()
     global run_time
     print("run_time: %s" % run_time)
