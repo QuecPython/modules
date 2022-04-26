@@ -1,13 +1,16 @@
 import utime
 import osTimer
-from machine import UART
+from machine import UART, Pin
 from usr.modules.location import Location
 from usr.modules.location import GPS
+from usr.modules.logging import getLogger
+
+log = getLogger(__name__)
 
 _gps_cfg = {
     "UARTn": UART.UART1,
-    "buadrate": 115200,
-    # "buadrate": 9600,
+    # "buadrate": 115200,
+    "buadrate": 9600,
     "databits": 8,
     "parity": 0,
     "stopbits": 1,
@@ -63,20 +66,34 @@ def timer_cb(args):
 
 
 def test_gps():
-    gps = GPS(_gps_cfg, gps_mode)
+    gpio2 = Pin(Pin.GPIO2, Pin.OUT, Pin.PULL_DISABLE, 1)
+    utime.sleep_ms(500)
+    log.debug("gpio2 read: %s" % gpio2.read())
+    gps = GPS(_gps_cfg, gps_mode, retry=100)
     gps_timer = osTimer()
     gps_timer.start(5, 1, timer_cb)
     while True:
         res = gps.read()
-        print("gps.read(): %s" % str(res))
+        log.debug("gps.read(): %s" % str(res))
         if res[0] == 0:
             break
-        utime.sleep_ms(500)
     gps_timer.stop()
     global run_time
-    print("run_time: %s" % run_time)
+    log.debug("run_time: %s" % run_time)
+
+
+def test_gps_walkup():
+    gpio2 = Pin(Pin.GPIO2, Pin.OUT, Pin.PULL_PU, 0)
+    utime.sleep_ms(500)
+    log.debug("gpio2 read: %s" % gpio2.read())
+    utime.sleep_ms(500)
+    gpio2.write(1)
+    utime.sleep_ms(500)
+    log.debug("gpio2 read: %s" % gpio2.read())
+    test_gps()
 
 
 if __name__ == "__main__":
     # test_location()
-    test_gps()
+    # test_gps()
+    test_gps_walkup()

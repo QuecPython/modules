@@ -78,16 +78,16 @@ class Battery(object):
             self.__init_charge()
 
     def __chrg_callback(self, args):
-        self.__get_charge_status()
+        self.__update_charge_status()
         if self.__charge_callback is not None:
-            self.__charge_callback(("CHRG", args))
+            self.__charge_callback(self.__charge_status)
 
     def __stdby_callback(self, args):
-        self.__get_charge_status()
+        self.__update_charge_status()
         if self.__charge_callback is not None:
-            self.__charge_callback(("STDBY", args))
+            self.__charge_callback(self.__charge_status)
 
-    def __get_charge_status(self):
+    def __update_charge_status(self):
         if self.__chrg_gpio.read() == 1 and self.__stdby_gpio.read() == 1:
             self.__charge_status = 0
         elif self.__chrg_gpio.read() == 0 and self.__stdby_gpio.read() == 1:
@@ -96,7 +96,6 @@ class Battery(object):
             self.__charge_status = 2
         else:
             raise TypeError("CHRG and STDBY cannot be 0 at the same time!")
-        return self.__charge_status
 
     def __init_charge(self):
         self.__chrg_gpio = Pin(self.__chrg_gpion, Pin.IN, Pin.PULL_DISABLE)
@@ -105,7 +104,7 @@ class Battery(object):
         self.__stdby_exint = ExtInt(self.__stdby_gpion, ExtInt.IRQ_RISING_FALLING, ExtInt.PULL_PU, self.__stdby_callback)
         self.__chrg_exint.enable()
         self.__stdby_exint.enable()
-        self.__get_charge_status()
+        self.__update_charge_status()
 
     def __get_soc_from_dict(self, key, volt_arg):
         """Get battery energy from map"""
@@ -182,4 +181,4 @@ class Battery(object):
         return False
 
     def get_charge_status(self):
-        return self.__get_charge_status()
+        return self.__charge_status
