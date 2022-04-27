@@ -204,6 +204,7 @@ class GPS(Singleton):
         self.__gps_backup_gpio = None
 
         self.__external_retrieve_queue = None
+        self.__queue_size = 2
         self.__first_break = 0
         self.__break = 0
         self.__gps_data = ""
@@ -244,12 +245,12 @@ class GPS(Singleton):
     def __reverse_gps_data(self, this_gps_data):
         gps_datas = []
         delimiter = "\r\n"
-        this_gps_data.replace(delimiter, "").replace("$", delimiter + "$")
+        if self.__gps_data:
+            self.__gps_data = delimiter.join(self.__gps_data.split(delimiter)[::-1])
         if this_gps_data:
-            gps_datas = this_gps_data.strip().split(delimiter)[::-1]
-            if self.__gps_data:
-                gps_datas.extend(self.__gps_data.split(delimiter))
-        return delimiter.join(gps_datas)
+            self.__gps_data += this_gps_data.strip().replace("\r", "").replace("\n", "").replace("$", delimiter + "$")
+            self.__gps_data = delimiter.join(self.__gps_data.split(delimiter)[::-1])
+        return self.__gps_data
 
     def __gps_timer_callback(self, args):
         """GPS read timer callback
@@ -257,7 +258,7 @@ class GPS(Singleton):
         """
         self.__break = 1
         if self.__external_retrieve_queue is not None:
-            self.__external_retrieve_queue.put(0)
+            self.__external_retrieve_queue.put(False)
 
     def __gps_data_check_callback(self, args):
         """GPS read old data clean timer callback
@@ -272,8 +273,7 @@ class GPS(Singleton):
 
     def __external_init(self):
         """External GPS init"""
-        self.__external_retrieve_queue = Queue(maxsize=8)
-        self.__external_open()
+        self.__external_retrieve_queue = Queue(maxsize=self.__queue_size)
 
     def __external_open(self):
         """External GPS start, UART init"""
@@ -292,12 +292,10 @@ class GPS(Singleton):
         GPS data retrieve callback from UART
         When data comes, send a message to queue of data length
         """
-        toRead = args[2]
-        log.debug("GPS __external_retrieve_cb args: %s" % str(args))
-        if toRead > 0 and toRead <= 10240:
-            if self.__external_retrieve_queue.size() >= 8:
-                self.__external_retrieve_queue.get()
-            self.__external_retrieve_queue.put(toRead)
+        # log.debug("GPS __external_retrieve_cb args: %s" % str(args))
+        if self.__external_retrieve_queue.size() >= self.__queue_size:
+            self.__external_retrieve_queue.get()
+        self.__external_retrieve_queue.put(True)
 
     def __internal_init(self):
         """Internal GPS init"""
@@ -345,9 +343,14 @@ class GPS(Singleton):
 
         while self.__break == 0:
             self.__gps_timer.start(50, 0, self.__gps_timer_callback)
-            nread = self.__external_retrieve_queue.get()
-            log.debug("[first] nread: %s" % nread)
-            self.__gps_data = self.__external_obj.read(nread).decode()
+            signal = self.__external_retrieve_queue.get()
+            log.debug("[first] signal: %s" % signal)
+            if signal:
+                to_read = self.__external_obj.any()
+                log.debug("[first] to_read: %s" % to_read)
+                if to_read > 0:
+                    self.__gps_data = self.__external_obj.read(to_read).decode()
+            self.__gps_timer.stop()
         self.__break = 0
 
         self.__gps_data = ""
@@ -355,27 +358,30 @@ class GPS(Singleton):
         self.__gga_data = ""
         self.__vtg_data = ""
         self.__gsv_data = ""
-        self.__gps_data_check_timer.start(1000, 1, self.__gps_data_check_callback)
+        self.__gps_data_check_timer.start(2000, 1, self.__gps_data_check_callback)
         cycle = 0
         while self.__break == 0:
-            self.__gps_timer.start(2000, 0, self.__gps_timer_callback)
-            nread = self.__external_retrieve_queue.get()
-            log.debug("[second] nread: %s" % nread)
-            if nread:
-                this_gps_data = self.__external_obj.read(nread).decode()
-                if this_gps_data:
-                    self.__gps_data = self.__reverse_gps_data(this_gps_data)
-                log.debug("__gps_data: %s" % self.__gps_data)
-                if not self.__rmc_data:
-                    self.__rmc_data = self.__gps_match.GxRMC(self.__gps_data)
-                if not self.__gga_data:
-                    self.__gga_data = self.__gps_match.GxGGA(self.__gps_data)
-                if not self.__vtg_data:
-                    self.__vtg_data = self.__gps_match.GxVTG(self.__gps_data)
-                if not self.__gsv_data:
-                    self.__gsv_data = self.__gps_match.GxGSV(self.__gps_data)
-                if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
-                    self.__break = 1
+            self.__gps_timer.start(1500, 0, self.__gps_timer_callback)
+            signal = self.__external_retrieve_queue.get()
+            log.debug("[second] signal: %s" % signal)
+            if signal:
+                to_read = self.__external_obj.any()
+                log.debug("[second] to_read: %s" % to_read)
+                if to_read > 0:
+                    this_gps_data = self.__external_obj.read(to_read).decode()
+                    log.debug("this_gps_data: %s" % this_gps_data)
+                    if this_gps_data:
+                        self.__gps_data = self.__reverse_gps_data(this_gps_data)
+                    if not self.__rmc_data:
+                        self.__rmc_data = self.__gps_match.GxRMC(self.__gps_data)
+                    if not self.__gga_data:
+                        self.__gga_data = self.__gps_match.GxGGA(self.__gps_data)
+                    if not self.__vtg_data:
+                        self.__vtg_data = self.__gps_match.GxVTG(self.__gps_data)
+                    if not self.__gsv_data:
+                        self.__gsv_data = self.__gps_match.GxGSV(self.__gps_data)
+                    if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
+                        self.__break = 1
             self.__gps_timer.stop()
             cycle += 1
             if cycle >= self.__retry:
@@ -519,23 +525,29 @@ class GPS(Singleton):
             longtitude, latitude = WGS84ToGCJ02(longtitude, latitude)
         return (longtitude, latitude, altitude)
 
-    def power_switch(self, GPIOn, onoff):
+    def power_switch(self, onoff):
         """GPS module power switch
 
         Params:
             GPIOn: GIPO Number
             onoff: 0 -- off, 1 -- on
         """
-        return self.__gps_power_control(GPIOn, onoff, "power_switch")
+        if self.__gps_cfg.get("PowerPin") is not None:
+            return self.__gps_power_control(self.__gps_cfg["PowerPin"], onoff, "power_switch")
+        else:
+            return False
 
-    def standby(self, GPIOn, onoff):
+    def standby(self, onoff):
         """GPS module low enery mode standby
 
         Params:
             GPIOn: GIPO Number
             onoff: 0 -- off, 1 -- on
         """
-        return self.__gps_power_control(GPIOn, onoff, "standby")
+        if self.__gps_cfg.get("StandbyPin") is not None:
+            return self.__gps_power_control(self.__gps_cfg["StandbyPin"], onoff, "standby")
+        else:
+            return False
 
     def backup(self, GPIOn, onoff):
         """GPS module low enery mode backup
@@ -544,7 +556,10 @@ class GPS(Singleton):
             GPIOn: GIPO Number
             onoff: 0 -- off, 1 -- on
         """
-        return self.__gps_power_control(GPIOn, onoff, "backup")
+        if self.__gps_cfg.get("BackupPin") is not None:
+            return self.__gps_power_control(GPIOn, onoff, "backup")
+        else:
+            return False
 
 
 class CellLocator(object):
