@@ -277,6 +277,7 @@ class GPS(Singleton):
 
     def __external_open(self):
         """External GPS start, UART init"""
+        self.power_switch(1)
         self.__external_obj = UART(
             self.__gps_cfg["UARTn"], self.__gps_cfg["buadrate"], self.__gps_cfg["databits"],
             self.__gps_cfg["parity"], self.__gps_cfg["stopbits"], self.__gps_cfg["flowctl"]

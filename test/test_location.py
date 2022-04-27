@@ -1,38 +1,40 @@
 import utime
 import osTimer
 from machine import UART, Pin
-from usr.modules.location import Location
-from usr.modules.location import GPS
-from usr.modules.logging import getLogger
-# from usr.location import Location
-# from usr.location import GPS
-# from usr.logging import getLogger
+# from usr.modules.location import Location
+# from usr.modules.location import GPS
+# from usr.modules.logging import getLogger
+from usr.location import Location
+from usr.location import GPS
+from usr.logging import getLogger
 
 log = getLogger(__name__)
 
 # EC600N_CNLB L76K
-_gps_cfg = {
-    "UARTn": UART.UART1,
-    "buadrate": 9600,
-    "databits": 8,
-    "parity": 0,
-    "stopbits": 1,
-    "flowctl": 0,
-    "PowerPin": Pin.GPIO2,
-    "StandbyPin": Pin.GPIO3,
-    "BackupPin": None
-}
-
-# EC600U_CNLB L76K Real Device
 # _gps_cfg = {
-#     "UARTn": UART.UART2,
+#     "UARTn": UART.UART1,
 #     "buadrate": 9600,
 #     "databits": 8,
 #     "parity": 0,
 #     "stopbits": 1,
 #     "flowctl": 0,
-#     "PowerPin": Pin.GPIO3
+#     "PowerPin": Pin.GPIO2,
+#     "StandbyPin": Pin.GPIO3,
+#     "BackupPin": None
 # }
+
+# EC600U_CNLB L76K Real Device
+_gps_cfg = {
+    "UARTn": UART.UART2,
+    "buadrate": 9600,
+    "databits": 8,
+    "parity": 0,
+    "stopbits": 1,
+    "flowctl": 0,
+    "PowerPin": Pin.GPIO3,
+    "StandbyPin": None,
+    "BackupPin": None
+}
 
 # EC600N_CNLC LC86L
 # _gps_cfg = {
