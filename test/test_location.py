@@ -1,12 +1,6 @@
-import utime
 import osTimer
-from machine import UART, Pin
-# from usr.modules.location import Location
-# from usr.modules.location import GPS
-# from usr.modules.logging import getLogger
-from usr.location import Location
-from usr.location import GPS
-from usr.logging import getLogger
+from usr.modules.logging import getLogger
+from usr.modules.location import Location, GPS, CellLocator, WiFiLocator
 
 log = getLogger(__name__)
 
@@ -24,28 +18,30 @@ log = getLogger(__name__)
 # }
 
 # EC600U_CNLB L76K Real Device
-_gps_cfg = {
-    "UARTn": UART.UART2,
-    "buadrate": 9600,
-    "databits": 8,
-    "parity": 0,
-    "stopbits": 1,
-    "flowctl": 0,
-    "PowerPin": Pin.GPIO3,
-    "StandbyPin": None,
-    "BackupPin": None
-}
-
-# EC600N_CNLC LC86L
 # _gps_cfg = {
-#     "UARTn": UART.UART1,
-#     "buadrate": 115200,
+#     "UARTn": UART.UART2,
+#     "buadrate": 9600,
 #     "databits": 8,
 #     "parity": 0,
 #     "stopbits": 1,
 #     "flowctl": 0,
-#     "PowerPin": None,
+#     "PowerPin": Pin.GPIO3,
+#     "StandbyPin": None,
+#     "BackupPin": None
 # }
+
+# EC600N_CNLC LC86L
+_gps_cfg = {
+    "UARTn": UART.UART1,
+    "buadrate": 115200,
+    "databits": 8,
+    "parity": 0,
+    "stopbits": 1,
+    "flowctl": 0,
+    "PowerPin": None,
+    "StandbyPin": None,
+    "BackupPin": None
+}
 
 _cell_cfg = {
     "serverAddr": "www.queclocator.com",
@@ -65,6 +61,90 @@ locator_init_params = {
     "cell_cfg": _cell_cfg,
     "wifi_cfg": _wifi_cfg,
 }
+
+
+def test_gps():
+    res = {"all": 0, "success": 0, "failed": 0}
+
+    gps_locator = GPS(_gps_cfg, gps_mode, retry=100)
+
+    if _gps_cfg["PowerPin"] is not None:
+        msg = "[test_gps] %s: GPS.power_switch(0) res: %s."
+        power_switch_res = gps_locator.power_switch(0)
+        assert power_switch_res, msg % ("FAILED", power_switch_res)
+        print(msg % ("SUCCESS", power_switch_res))
+        res["success"] += 1
+
+        msg = "[test_gps] %s: GPS.power_switch(1) res: %s."
+        power_switch_res = gps_locator.power_switch(1)
+        assert power_switch_res, msg % ("FAILED", power_switch_res)
+        print(msg % ("SUCCESS", power_switch_res))
+        res["success"] += 1
+
+    if _gps_cfg["StandbyPin"] is not None:
+        msg = "[test_gps] %s: GPS.standby(1) res: %s."
+        standby_res = gps_locator.standby(1)
+        assert standby_res, msg % ("FAILED", standby_res)
+        print(msg % ("SUCCESS", standby_res))
+        res["success"] += 1
+
+        msg = "[test_gps] %s: GPS.standby(0) res: %s."
+        standby_res = gps_locator.standby(0)
+        assert standby_res, msg % ("FAILED", standby_res)
+        print(msg % ("SUCCESS", standby_res))
+        res["success"] += 1
+
+    if _gps_cfg["BackupPin"] is not None:
+        msg = "[test_gps] %s: GPS.backup(1) res: %s."
+        backup_res = gps_locator.backup(1)
+        assert backup_res, msg % ("FAILED", backup_res)
+        print(msg % ("SUCCESS", backup_res))
+        res["success"] += 1
+
+        msg = "[test_gps] %s: GPS.backup(0) res: %s."
+        backup_res = gps_locator.backup(0)
+        assert backup_res, msg % ("FAILED", backup_res)
+        print(msg % ("SUCCESS", backup_res))
+        res["success"] += 1
+
+    msg = "[test_gps] %s: GPS.read() gps_data: %s."
+    gps_data = gps_locator.read()
+    assert gps_data[0] == 0, msg % ("FAILED", gps_data)
+    print(msg % ("SUCCESS", gps_data))
+    res["success"] += 1
+
+    if gps_data[0] == 0 and gps_data[1]:
+        msg = "[test_gps] %s: GPS.read_coordinates() gps_coordinates: %s."
+        gps_coordinates = gps_locator.read_coordinates(gps_data[1])
+        assert gps_coordinates and isinstance(gps_coordinates, tuple), msg % ("FAILED", gps_coordinates)
+        print(msg % ("SUCCESS", gps_coordinates))
+        res["success"] += 1
+
+    print("[test_gps] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
+
+
+def test_cell():
+    res = {"all": 0, "success": 0, "failed": 0}
+
+    msg = "[test_cell] %s: CellLocator.read() cell_data: %s."
+    cell_locator = CellLocator(_cell_cfg)
+    cell_data = cell_locator.read()
+    assert cell_data[0] == 0, msg % ("FAILED", cell_data)
+    print(msg % ("SUCCESS", cell_data))
+    res["success"] += 1
+    print("[test_cell] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
+
+
+def test_wifi():
+    res = {"all": 0, "success": 0, "failed": 0}
+
+    msg = "[test_wifi] %s: WiFiLocator.read() cell_data: %s."
+    wifi_locator = WiFiLocator(_wifi_cfg)
+    wifi_data = wifi_locator.read()
+    assert wifi_data[0] == 0, msg % ("FAILED", wifi_data)
+    print(msg % ("SUCCESS", wifi_data))
+    res["success"] += 1
+    print("[test_wifi] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
 
 
 def test_location():
@@ -95,7 +175,7 @@ def timer_cb(args):
     run_time += 5
 
 
-def test_gps():
+def test_gps_time():
     gps = GPS(_gps_cfg, gps_mode, retry=100)
     # gps.power_switch(0)
     # utime.sleep(1)
@@ -115,18 +195,8 @@ def test_gps():
     log.debug("run_time: %s" % run_time)
 
 
-def test_gps_walkup():
-    gpio3 = Pin(_gps_cfg["PowerPin"], Pin.OUT, Pin.PULL_PU, 0)
-    utime.sleep_ms(500)
-    log.debug("gpio3 read: %s" % gpio3.read())
-    utime.sleep_ms(500)
-    gpio3.write(1)
-    utime.sleep_ms(500)
-    log.debug("gpio3 read: %s" % gpio3.read())
-    test_gps()
-
-
 if __name__ == "__main__":
-    # test_location()
-    test_gps()
-    # test_gps_walkup()
+    # test_gps()
+    # test_cell()
+    # test_wifi()
+    test_location()

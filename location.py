@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import ure
+import net
 import math
 import utime
 import osTimer
 import _thread
+import wifiScan
 import cellLocator
 
 from queue import Queue
@@ -251,6 +253,18 @@ class GPS(Singleton):
             self.__gps_data += this_gps_data.strip().replace("\r", "").replace("\n", "").replace("$", delimiter + "$")
             self.__gps_data = delimiter.join(self.__gps_data.split(delimiter)[::-1])
         return self.__gps_data
+
+    def __read_latitude(self, gps_data):
+        """Read latitude from gps data"""
+        return self.__gps_parse.GxGGA_latitude(self.__gps_match.GxGGA(gps_data))
+
+    def __read_longtitude(self, gps_data):
+        """Read longtitude from gps data"""
+        return self.__gps_parse.GxGGA_longtitude(self.__gps_match.GxGGA(gps_data))
+
+    def __read_altitude(self, gps_data):
+        """Read altitude from gps data"""
+        return self.__gps_parse.GxGGA_altitude(self.__gps_match.GxGGA(gps_data))
 
     def __gps_timer_callback(self, args):
         """GPS read timer callback
@@ -494,19 +508,7 @@ class GPS(Singleton):
         res = 0 if gps_data else -1
         return (res, gps_data)
 
-    def read_latitude(self, gps_data):
-        """Read latitude from gps data"""
-        return self.__gps_parse.GxGGA_latitude(self.__gps_match.GxGGA(gps_data))
-
-    def read_longtitude(self, gps_data):
-        """Read longtitude from gps data"""
-        return self.__gps_parse.GxGGA_longtitude(self.__gps_match.GxGGA(gps_data))
-
-    def read_altitude(self, gps_data):
-        """Read altitude from gps data"""
-        return self.__gps_parse.GxGGA_altitude(self.__gps_match.GxGGA(gps_data))
-
-    def read_coordinates(self, gps_data, map_coordinate_system="WGS84"):
+    def read_coordinates(self, gps_data):
         """Read positioning coordinates.
 
         Params:
@@ -516,21 +518,18 @@ class GPS(Singleton):
         Return:
             (longtitude, latitude, altitude)
         """
-        latitude = self.read_latitude(gps_data)
+        latitude = self.__read_latitude(gps_data)
         latitude = float(latitude) if latitude else latitude
-        longtitude = self.read_longtitude(gps_data)
+        longtitude = self.__read_longtitude(gps_data)
         longtitude = float(longtitude) if longtitude else longtitude
-        altitude = self.read_altitude(gps_data)
+        altitude = self.__read_altitude(gps_data)
         altitude = float(altitude) if altitude else altitude
-        if map_coordinate_system == "GCJ02":
-            longtitude, latitude = WGS84ToGCJ02(longtitude, latitude)
         return (longtitude, latitude, altitude)
 
     def power_switch(self, onoff):
         """GPS module power switch
 
         Params:
-            GPIOn: GIPO Number
             onoff: 0 -- off, 1 -- on
         """
         if self.__gps_cfg.get("PowerPin") is not None:
@@ -542,7 +541,6 @@ class GPS(Singleton):
         """GPS module low enery mode standby
 
         Params:
-            GPIOn: GIPO Number
             onoff: 0 -- off, 1 -- on
         """
         if self.__gps_cfg.get("StandbyPin") is not None:
@@ -550,11 +548,10 @@ class GPS(Singleton):
         else:
             return False
 
-    def backup(self, GPIOn, onoff):
+    def backup(self, onoff):
         """GPS module low enery mode backup
 
         Params:
-            GPIOn: GIPO Number
             onoff: 0 -- off, 1 -- on
         """
         if self.__gps_cfg.get("BackupPin") is not None:
@@ -567,9 +564,15 @@ class CellLocator(object):
     """This class is for reading cell location data"""
 
     def __init__(self, cell_cfg):
-        self.cell_cfg = cell_cfg
+        self.__cell_cfg = cell_cfg
 
-    def read(self, map_coordinate_system="WGS84"):
+    def read(self):
+        read_loc_res = self.__read_loc()
+        read_cell_res = self.__read_cell()
+        res = 0 if read_loc_res[0] == 0 or read_cell_res[0] == 0 else -1
+        return (res, read_loc_res[1], read_cell_res[1])
+
+    def __read_loc(self):
         """Read cell location data.
 
         Return: (res_code, loc_data)
@@ -586,31 +589,51 @@ class CellLocator(object):
         """
         res = -1
         loc_data = cellLocator.getLocation(
-            self.cell_cfg["serverAddr"],
-            self.cell_cfg["port"],
-            self.cell_cfg["token"],
-            self.cell_cfg["timeout"],
-            self.cell_cfg["profileIdx"]
+            self.__cell_cfg["serverAddr"],
+            self.__cell_cfg["port"],
+            self.__cell_cfg["token"],
+            self.__cell_cfg["timeout"],
+            self.__cell_cfg["profileIdx"]
         )
         if isinstance(loc_data, tuple) and len(loc_data) == 3:
             res = 0
-            if map_coordinate_system == "GCJ02":
-                lon, lat = WGS84ToGCJ02(loc_data[0], loc_data[1])
-                loc_data = (lon, lat, loc_data[2])
         else:
             res = loc_data
             loc_data = ()
 
         return (res, loc_data)
 
+    def __read_cell(self):
+        res = -1
+        near_cell = []
+        server_cell = []
+
+        near_cells = net.getCi()
+        if near_cells != -1 and isinstance(near_cells, list):
+            near_cell = list(map(str, near_cells))[:3]
+
+        server_cells = net.getCellInfo()
+        if server_cells != -1 and isinstance(server_cells, tuple):
+            if len(server_cells) >= 3:
+                if server_cells[2] and isinstance(server_cells[2], list):
+                    server_cell = [(i[2], 0, i[5], i[1], i[7]) for i in server_cells[2] if i[0] == 0]
+        res = 0 if near_cell or server_cell else -1
+        return (res, {"near_cell": near_cell, "server_cell": server_cell})
+
 
 class WiFiLocator(object):
     """This class is for reading wifi location data"""
 
     def __init__(self, wifi_cfg):
-        self.wifilocator_obj = wifilocator(wifi_cfg["token"])
+        self.__wifilocator_obj = wifilocator(wifi_cfg["token"])
 
-    def read(self, map_coordinate_system="WGS84"):
+    def read(self):
+        read_loc_res = self.__read_loc()
+        read_mac_res = self.__read_mac()
+        res = 0 if read_loc_res[0] == 0 or read_mac_res[0] == 0 else -1
+        return (res, read_loc_res[1], read_mac_res[1])
+
+    def __read_loc(self):
         """Read wifi location data.
 
         Return: (res_code, loc_data)
@@ -623,17 +646,27 @@ class WiFiLocator(object):
                 (117.1138, 31.82279, 550)
         """
         res = -1
-        loc_data = self.wifilocator_obj.getwifilocator()
+        loc_data = self.__wifilocator_obj.getwifilocator()
         if isinstance(loc_data, tuple) and len(loc_data) == 3:
             res = 0
-            if map_coordinate_system == "GCJ02":
-                lon, lat = WGS84ToGCJ02(loc_data[0], loc_data[1])
-                loc_data = (lon, lat, loc_data[2])
         else:
             res = loc_data
             loc_data = ()
 
         return (res, loc_data)
+
+    def __read_mac(self):
+        res = -1
+        macs = []
+        if wifiScan.support():
+            if wifiScan.control(1) == 0:
+                if wifiScan.getState():
+                    wifisacn_start = wifiScan.start()
+                    if wifisacn_start != -1 and wifisacn_start[0] > 0:
+                        macs = [i[0] for i in wifisacn_start[1]]
+                        res = 0
+            wifiScan.control(0)
+        return (res, macs)
 
 
 class Location(Singleton):
@@ -718,7 +751,7 @@ class Location(Singleton):
             (117.1138, 31.82279, 550) or ()
         """
         if self.cellLoc:
-            return self.cellLoc.read()[1]
+            return (self.cellLoc.read()[1], self.cellLoc.read()[2])
         return ()
 
     def __read_wifi(self):
@@ -728,7 +761,7 @@ class Location(Singleton):
             (117.1138, 31.82279, 550) or ()
         """
         if self.wifiLoc:
-            return self.wifiLoc.read()[1]
+            return (self.wifiLoc.read()[1], self.wifiLoc.read()[2])
         return ()
 
     def read(self, loc_method):
