@@ -184,6 +184,9 @@ class GPS(Singleton):
     """This class if for reading gps data.
 
     Now support external gps and internal gps.
+
+    Sleep power consumption:
+        power off < backup < standby
     """
 
     def __init__(self, gps_cfg, gps_mode, retry=100):
@@ -384,7 +387,7 @@ class GPS(Singleton):
                 log.debug("[second] to_read: %s" % to_read)
                 if to_read > 0:
                     this_gps_data = self.__external_obj.read(to_read).decode()
-                    log.debug("this_gps_data: %s" % this_gps_data)
+                    # log.debug("this_gps_data: %s" % this_gps_data)
                     if this_gps_data:
                         self.__gps_data = self.__reverse_gps_data(this_gps_data)
                     if not self.__rmc_data:
@@ -537,17 +540,6 @@ class GPS(Singleton):
         else:
             return False
 
-    def standby(self, onoff):
-        """GPS module low enery mode standby
-
-        Params:
-            onoff: 0 -- off, 1 -- on
-        """
-        if self.__gps_cfg.get("StandbyPin") is not None:
-            return self.__gps_power_control(self.__gps_cfg["StandbyPin"], onoff, "standby")
-        else:
-            return False
-
     def backup(self, onoff):
         """GPS module low enery mode backup
 
@@ -556,6 +548,17 @@ class GPS(Singleton):
         """
         if self.__gps_cfg.get("BackupPin") is not None:
             return self.__gps_power_control(GPIOn, onoff, "backup")
+        else:
+            return False
+
+    def standby(self, onoff):
+        """GPS module low enery mode standby
+
+        Params:
+            onoff: 0 -- off, 1 -- on
+        """
+        if self.__gps_cfg.get("StandbyPin") is not None:
+            return self.__gps_power_control(self.__gps_cfg["StandbyPin"], onoff, "standby")
         else:
             return False
 

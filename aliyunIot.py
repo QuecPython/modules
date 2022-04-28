@@ -508,12 +508,13 @@ class AliYunIot(CloudObservable):
                 self.__ali.start()
                 log.debug("aLiYun start.")
             else:
+                log.error("aLiYun subscribe falied and to disconnect.")
                 self.close()
-                log.debug("aLiYun disconnect.")
                 self.__ali = None
                 return False
         else:
-            log.error("setMqtt Falied!")
+            log.error("setMqtt falied!")
+            self.close()
             self.__ali = None
             return False
 
