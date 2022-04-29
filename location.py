@@ -55,33 +55,33 @@ class _gps_mode(object):
 
 
 def transformLat(x, y):
-    ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * math.sqrt(math.fabs(x));
-    ret += (20.0 * math.sin(6.0 * x * M_PI) + 20.0 * math.sin(2.0 * x * M_PI)) * 2.0 / 3.0;
-    ret += (20.0 * math.sin(y * M_PI) + 40.0 * math.sin(y / 3.0 * M_PI)) * 2.0 / 3.0;
-    ret += (160.0 * math.sin(y / 12.0 * M_PI) + 320 * math.sin(y * M_PI / 30.0)) * 2.0 / 3.0;
-    return ret;
+    ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * math.sqrt(math.fabs(x))
+    ret += (20.0 * math.sin(6.0 * x * M_PI) + 20.0 * math.sin(2.0 * x * M_PI)) * 2.0 / 3.0
+    ret += (20.0 * math.sin(y * M_PI) + 40.0 * math.sin(y / 3.0 * M_PI)) * 2.0 / 3.0
+    ret += (160.0 * math.sin(y / 12.0 * M_PI) + 320 * math.sin(y * M_PI / 30.0)) * 2.0 / 3.0
+    return ret
 
 
 def transformLon(x, y):
-    ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * math.sqrt(math.fabs(x));
-    ret += (20.0 * math.sin(6.0 * x * M_PI) + 20.0 * math.sin(2.0 * x * M_PI)) * 2.0 / 3.0;
-    ret += (20.0 * math.sin(x * M_PI) + 40.0 * math.sin(x / 3.0 * M_PI)) * 2.0 / 3.0;
-    ret += (150.0 * math.sin(x / 12.0 * M_PI) + 300.0 * math.sin(x / 30.0 * M_PI)) * 2.0 / 3.0;
-    return ret;
+    ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * math.sqrt(math.fabs(x))
+    ret += (20.0 * math.sin(6.0 * x * M_PI) + 20.0 * math.sin(2.0 * x * M_PI)) * 2.0 / 3.0
+    ret += (20.0 * math.sin(x * M_PI) + 40.0 * math.sin(x / 3.0 * M_PI)) * 2.0 / 3.0
+    ret += (150.0 * math.sin(x / 12.0 * M_PI) + 300.0 * math.sin(x / 30.0 * M_PI)) * 2.0 / 3.0
+    return ret
 
 
 def WGS84ToGCJ02(lon, lat):
-    dLat = transformLat(lon - 105.0, lat - 35.0);
-    dLon = transformLon(lon - 105.0, lat - 35.0);
-    radLat = lat / 180.0 * M_PI;
-    magic = math.sin(radLat);
-    magic = 1 - magic * magic * EE;
-    sqrtMagic = math.sqrt(magic);
+    dLat = transformLat(lon - 105.0, lat - 35.0)
+    dLon = transformLon(lon - 105.0, lat - 35.0)
+    radLat = lat / 180.0 * M_PI
+    magic = math.sin(radLat)
+    magic = 1 - magic * magic * EE
+    sqrtMagic = math.sqrt(magic)
 
-    dLat = (dLat * 180.0) / ((EARTH_RADIUS * 1000 * (1 - EE)) / (magic * sqrtMagic) * M_PI);
-    dLon = (dLon * 180.0) / (EARTH_RADIUS * 1000 / sqrtMagic * math.cos(radLat) * M_PI);
-    lon02 = lon + dLon;
-    lat02 = lat + dLat;
+    dLat = (dLat * 180.0) / ((EARTH_RADIUS * 1000 * (1 - EE)) / (magic * sqrtMagic) * M_PI)
+    dLon = (dLon * 180.0) / (EARTH_RADIUS * 1000 / sqrtMagic * math.cos(radLat) * M_PI)
+    lon02 = lon + dLon
+    lat02 = lat + dLat
 
     return lon02, lat02
 
@@ -404,7 +404,8 @@ class GPS(Singleton):
             cycle += 1
             if cycle >= self.__retry:
                 self.__break = 1
-            utime.sleep(1)
+            if self.__break != 1:
+                utime.sleep(1)
         self.__gps_data_check_timer.stop()
         self.__break = 0
 
@@ -472,7 +473,8 @@ class GPS(Singleton):
             if cycle >= self.__retry:
                 if self.__break != 1:
                     self.__break = 1
-            utime.sleep(1)
+            if self.__break != 1:
+                utime.sleep(1)
         self.__gps_data_check_timer.stop()
         self.__break = 0
 
