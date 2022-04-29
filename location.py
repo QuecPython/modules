@@ -404,6 +404,7 @@ class GPS(Singleton):
             cycle += 1
             if cycle >= self.__retry:
                 self.__break = 1
+            utime.sleep(1)
         self.__gps_data_check_timer.stop()
         self.__break = 0
 
@@ -471,6 +472,7 @@ class GPS(Singleton):
             if cycle >= self.__retry:
                 if self.__break != 1:
                     self.__break = 1
+            utime.sleep(1)
         self.__gps_data_check_timer.stop()
         self.__break = 0
 
