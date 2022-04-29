@@ -613,13 +613,13 @@ class CellLocator(object):
 
         near_cells = net.getCi()
         if near_cells != -1 and isinstance(near_cells, list):
-            near_cell = list(map(str, near_cells))[:3]
+            near_cell = list(map(str, near_cells))
 
         server_cells = net.getCellInfo()
         if server_cells != -1 and isinstance(server_cells, tuple):
             if len(server_cells) >= 3:
                 if server_cells[2] and isinstance(server_cells[2], list):
-                    server_cell = [(i[2], 0, i[5], i[1], i[7]) for i in server_cells[2] if i[0] == 0]
+                    server_cell = [i for i in server_cells[2] if i[0] == 0]
         res = 0 if near_cell or server_cell else -1
         return (res, {"near_cell": near_cell, "server_cell": server_cell})
 
