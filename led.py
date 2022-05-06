@@ -43,7 +43,7 @@ class LED(object):
         # __period is 0, not start led timer and stop led timer.
         if self.__period > 0:
             self.led_timer_stop()
-            if self.led_timer.start(self.__period, 1, self.__led_timer_cb) == 0:
+            if self.__led_timer.start(self.__period, 1, self.__led_timer_cb) == 0:
                 return True
 
         return False
