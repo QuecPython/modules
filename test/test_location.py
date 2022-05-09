@@ -56,7 +56,7 @@ _wifi_cfg = {
     "token": "xGP77d2z0i91s67n"
 }
 
-gps_mode = 0x2
+gps_mode = 0x1
 locator_init_params = {
     "gps_cfg": _gps_cfg,
     "cell_cfg": _cell_cfg,
@@ -67,7 +67,7 @@ locator_init_params = {
 def test_gps():
     res = {"all": 0, "success": 0, "failed": 0}
 
-    gps_locator = GPS(_gps_cfg, gps_mode, retry=100)
+    gps_locator = GPS(_gps_cfg, gps_mode)
 
     if _gps_cfg["PowerPin"] is not None:
         msg = "[test_gps] %s: GPS.power_switch(0) res: %s."
@@ -109,7 +109,7 @@ def test_gps():
         res["success"] += 1
 
     msg = "[test_gps] %s: GPS.read() gps_data: %s."
-    gps_data = gps_locator.read()
+    gps_data = gps_locator.read(retry=200)
     assert gps_data[0] == 0, msg % ("FAILED", gps_data)
     print(msg % ("SUCCESS", gps_data))
     res["success"] += 1
@@ -197,7 +197,7 @@ def test_gps_time():
 
 
 if __name__ == "__main__":
-    # test_gps()
+    test_gps()
     # test_cell()
     # test_wifi()
-    test_location()
+    # test_location()

@@ -23,7 +23,10 @@ import cellLocator
 
 from queue import Queue
 from machine import UART, Pin
-from wifilocator import wifilocator
+try:
+    from wifilocator import wifilocator
+except:
+    wifilocator = None
 
 from usr.modules.logging import getLogger
 from usr.modules.common import Singleton, option_lock
@@ -416,6 +419,7 @@ class GPS(Singleton):
 
     @option_lock(_gps_read_lock)
     def __internal_read(self, retry):
+        log.debug("__internal_read start.")
         """Read internal GPS data
 
         Return:
@@ -435,12 +439,14 @@ class GPS(Singleton):
             $BDGSV,5,5,18,29,02,075,,20,01,035,,1*72
             $GNGLL,3149.330773,N,11706.946971,E,073144.000,A,D*4E
         """
-        self.__external_open()
+        log.debug("__internal_open start.")
+        self.__internal_open()
+        log.debug("__internal_open end.")
 
         while self.__break == 0:
-            self.__gps_timer.start(50, 0, self.__gps_timer_callback)
-            self.__gps_data = quecgnss.read(1024)
-            self.__gps_timer.stop()
+            gnss_data = quecgnss.read(1024)
+            if gnss_data[0] == 0:
+                self.__break = 1
         self.__break = 0
 
         self.__gps_data = ""
@@ -451,10 +457,10 @@ class GPS(Singleton):
         self.__gps_data_check_timer.start(2000, 1, self.__gps_data_check_callback)
         cycle = 0
         while self.__break == 0:
-            self.__gps_timer.start(1500, 0, self.__gps_timer_callback)
             gnss_data = quecgnss.read(1024)
             if gnss_data and gnss_data[1]:
                 this_gps_data = gnss_data[1].decode() if len(gnss_data) > 1 and gnss_data[1] else ""
+                log.debug("[second] this_gps_data: %s" % this_gps_data)
                 if this_gps_data:
                     self.__gps_data = self.__reverse_gps_data(this_gps_data)
                 if not self.__rmc_data:
@@ -467,7 +473,6 @@ class GPS(Singleton):
                     self.__gsv_data = self.__gps_match.GxGSV(self.__gps_data)
                 if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
                     self.__break = 1
-            self.__gps_timer.stop()
             cycle += 1
             if cycle >= retry:
                 if self.__break != 1:
