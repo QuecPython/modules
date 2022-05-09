@@ -1,4 +1,5 @@
 import osTimer
+from machine import UART
 from usr.modules.logging import getLogger
 from usr.modules.location import Location, GPS, CellLocator, WiFiLocator
 

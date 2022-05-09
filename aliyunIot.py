@@ -60,31 +60,27 @@ class AliObjectModel(CloudObjectModel):
     This class extend CloudObjectModel.
 
     Attribute:
-        items:
-            - object model dictionary
-            - data format:
-            {
-                "events": {
-                    "name": "events",
-                    "id": "",
-                    "perm": "",
-                    "struct_info": {
-                        "name": "struct",
-                        "id": "",
-                        "struct_info": {
-                            "key": {
-                                "name": "key"
-                            }
-                        },
-                    },
-                },
-                "properties": {
-                    "name": "event",
-                    "id": "",
-                    "perm": "",
-                    "struct_info": {}
+        events:
+            Attribute:
+                - object model event
+                - attribute value data format
+                {
+                    "sos_alert": {
+                        local_time: 1651136994000
+                    }
                 }
-            }
+        properties:
+            Attribute:
+                - object model property
+                - attribute value data format
+                {
+                    "GeoLocation": {
+                        "Longtitude": 0.0,
+                        "Latitude": 0.0,
+                        "Altitude": 0.0,
+                        "CoordinateSystem": 0
+                    }
+                }
     """
 
     def __init__(self, om_file="/usr/aliyun_object_model.json"):
@@ -316,7 +312,10 @@ class AliYunIot(CloudObservable):
             data: response dictionary info
         """
         topic = topic.decode()
-        data = ujson.loads(data)
+        try:
+            data = ujson.loads(data)
+        except:
+            pass
         log.info("topic: %s, data: %s" % (topic, data))
         if topic.endswith("/post_reply"):
             self.__put_post_res(data["id"], True if data["code"] == 200 else False)
@@ -592,8 +591,9 @@ class AliYunIot(CloudObservable):
         """
         topic = self.rrpc_topic_response.format(message_id)
         pub_data = ujson.dumps(data) if isinstance(data, dict) else data
-        self.__ali.publish(topic, pub_data, qos=0)
-        return True
+        if self.__ali.publish(topic, pub_data, qos=0) == 0:
+            return True
+        return False
 
     def device_report(self):
         """Publish mcu and firmware name, version
@@ -667,12 +667,12 @@ class AliYunIot(CloudObservable):
             "id": msg_id,
             "params": {
                 "version": version,
-                "module": module,
-            },
+                "module": module
+            }
         }
         publish_res = self.__ali.publish(self.ota_topic_device_inform, ujson.dumps(publish_data), qos=0)
         log.debug("version: %s, module: %s, publish_res: %s" % (version, module, publish_res))
-        return publish_res
+        return True if publish_res == 0 else False
 
     def ota_device_progress(self, step, desc, module="default"):
         """Publish ota upgrade process
@@ -738,23 +738,15 @@ class AliYunIot(CloudObservable):
             log.error("ota_firmware_get publish_res: %s" % publish_res)
             return False
 
-    def ota_file_download(self, params):
+    def ota_file_download(self, fileToken, streamId, fileId, size, offset):
         """Publish mqtt ota plain file info request
 
         Parameter:
-            params: file download info
-            params format:
-            {
-                "fileToken": "1bb8***",
-                "fileInfo": {
-                    "streamId": 1234565,
-                    "fileId": 1
-                },
-                "fileBlock": {
-                    "size": 256,
-                    "offset": 2
-                }
-            }
+            fileToken: The unique identification Token of the file
+            streamId: The unique identifier when downloading the OTA upgrade package through the MQTT protocol.
+            fileId: Unique identifier for a single upgrade package file.
+            size: The size of the file segment requested to be downloaded, in bytes. The value range is 256 B~131072 B. If it is the last file segment, the value ranges from 1 B to 131072 B.
+            offset: The starting address of the bytes corresponding to the file fragment. The value range is 0~16777216.
 
         Return:
             Ture: Success
@@ -764,7 +756,17 @@ class AliYunIot(CloudObservable):
         publish_data = {
             "id": msg_id,
             "version": "1.0",
-            "params": params
+            "params": {
+                "fileToken": fileToken,
+                "fileInfo": {
+                    "streamId": streamId,
+                    "fileId": fileId
+                },
+                "fileBlock": {
+                    "size": size,
+                    "offset": offset
+                }
+            }
         }
         publish_res = self.__ali.publish(self.ota_topic_file_download, ujson.dumps(publish_data), qos=0)
         if publish_res:

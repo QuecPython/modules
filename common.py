@@ -20,10 +20,6 @@ LOWENERGYMAP = {
         "POWERDOWN",
         "PM",
     ],
-    "EC200U": [
-        "POWERDOWN",
-        "PM",
-    ],
     "EC600N": [
         "PM",
     ],
@@ -35,8 +31,7 @@ LOWENERGYMAP = {
 
 def numiter(num=99999):
     """Number generation iterator"""
-    for i in range(num):
-        yield i
+    return iter(range(num))
 
 
 def option_lock(thread_lock):
@@ -67,7 +62,7 @@ class Singleton(object):
         pass
 
     def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, "instance_dict"):
+        if not hasattr(cls, "_instance"):
             Singleton.instance_dict = {}
 
         if str(cls) not in Singleton.instance_dict.keys():

@@ -22,29 +22,20 @@ class RemoteSubscribe(CloudObserver):
     def __init__(self):
         self.__executor = None
 
-    def get_executor(self):
-        return self.__executor
-
-    def add_executor(self, executor):
-        if executor:
-            self.__executor = executor
-            return True
-        return False
-
-    def raw_data(self, *args, **kwargs):
+    def __raw_data(self, *args, **kwargs):
         return self.__executor.event_option(*args, **kwargs) if self.__executor else False
 
-    def object_model(self, *args, **kwargs):
+    def __object_model(self, *args, **kwargs):
         log.debug("object_model args: %s, kwargs: %s" % (str(args), str(kwargs)))
         return self.__executor.event_done(*args, **kwargs) if self.__executor else False
 
-    def query(self, *args, **kwargs):
+    def __query(self, *args, **kwargs):
         return self.__executor.event_query(*args, **kwargs) if self.__executor else False
 
-    def ota_plain(self, *args, **kwargs):
+    def __ota_plain(self, *args, **kwargs):
         return self.__executor.event_ota_plain(*args, **kwargs) if self.__executor else False
 
-    def ota_file_download(self, *args, **kwargs):
+    def __ota_file_download(self, *args, **kwargs):
         # TODO: To Download OTA File For MQTT Association (Not Support Now.)
         log.debug("ota_file_download: %s" % str(args))
         if self.__executor and hasattr(self.__executor, "ota_file_download"):
@@ -52,7 +43,7 @@ class RemoteSubscribe(CloudObserver):
         else:
             return False
 
-    def rrpc_request(self, *args, **kwargs):
+    def __rrpc_request(self, *args, **kwargs):
         """RRPC request
 
         kwargs:
@@ -60,6 +51,12 @@ class RemoteSubscribe(CloudObserver):
             data: rrpc request body
         """
         return self.__executor.event_rrpc_request(*args, **kwargs) if self.__executor else False
+
+    def add_executor(self, executor):
+        if executor:
+            self.__executor = executor
+            return True
+        return False
 
     def execute(self, observable, *args, **kwargs):
         """
@@ -72,7 +69,7 @@ class RemoteSubscribe(CloudObserver):
         2.5 ota_file_download: Download OTA File For MQTT Association (Not Support Now).
         3. args[2]: Cloud DownLink Data(List Or Dict).
         """
-        opt_attr = args[1]
+        opt_attr = "__" + args[1]
         opt_args = args[2] if not isinstance(args[2], dict) else ()
         opt_kwargs = args[2] if isinstance(args[2], dict) else {}
         if hasattr(self, opt_attr):

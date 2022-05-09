@@ -137,22 +137,6 @@ class GPSParse(object):
                 return satellite_num_re.group(0).split(",")[-2]
         return ""
 
-    def GxVTG_speed(self, vtg_data):
-        """Parse speed from VTG"""
-        if vtg_data:
-            speed_re = ure.search(r",N,\d+\.\d+,K,", vtg_data)
-            if speed_re:
-                return speed_re.group(0)[3:-3]
-        return ""
-
-    def GxGSV_satellite_num(self, gsv_data):
-        """Parse satellite num from GSV"""
-        if gsv_data:
-            satellite_num_re = ure.search(r"\$G[NP]GSV,\d+,\d+,\d+,", gsv_data)
-            if satellite_num_re:
-                return satellite_num_re.group(0).split(",")[-2]
-        return ""
-
     def GxGGA_latitude(self, gga_data):
         """Parse latitude from GGA"""
         if gga_data:
@@ -179,6 +163,22 @@ class GPSParse(object):
                 return altitude_re.group(0)[1:-3]
         return ""
 
+    def GxVTG_speed(self, vtg_data):
+        """Parse speed from VTG"""
+        if vtg_data:
+            speed_re = ure.search(r",N,\d+\.\d+,K,", vtg_data)
+            if speed_re:
+                return speed_re.group(0)[3:-3]
+        return ""
+
+    def GxGSV_satellite_num(self, gsv_data):
+        """Parse satellite num from GSV"""
+        if gsv_data:
+            satellite_num_re = ure.search(r"\$G[NP]GSV,\d+,\d+,\d+,", gsv_data)
+            if satellite_num_re:
+                return satellite_num_re.group(0).split(",")[-2]
+        return ""
+
 
 class GPS(Singleton):
     """This class if for reading gps data.
@@ -189,7 +189,7 @@ class GPS(Singleton):
         power off < backup < standby
     """
 
-    def __init__(self, gps_cfg, gps_mode, retry=100):
+    def __init__(self, gps_cfg, gps_mode):
         """ Init gps params
 
         Parameter:
@@ -199,7 +199,6 @@ class GPS(Singleton):
         """
         self.__gps_cfg = gps_cfg
         self.__gps_mode = gps_mode
-        self.__retry = retry
         self.__external_obj = None
         self.__internal_obj = quecgnss
         self.__gps_match = GPSMatch()
@@ -336,7 +335,7 @@ class GPS(Singleton):
         self.__internal_obj.gnssEnable(0)
 
     @option_lock(_gps_read_lock)
-    def __external_read(self):
+    def __external_read(self, retry):
         """Read external GPS data
 
         Return:
@@ -387,7 +386,7 @@ class GPS(Singleton):
                 log.debug("[second] to_read: %s" % to_read)
                 if to_read > 0:
                     this_gps_data = self.__external_obj.read(to_read).decode()
-                    # log.debug("this_gps_data: %s" % this_gps_data)
+                    log.debug("this_gps_data: %s" % this_gps_data)
                     if this_gps_data:
                         self.__gps_data = self.__reverse_gps_data(this_gps_data)
                     if not self.__rmc_data:
@@ -402,7 +401,7 @@ class GPS(Singleton):
                         self.__break = 1
             self.__gps_timer.stop()
             cycle += 1
-            if cycle >= self.__retry:
+            if cycle >= retry:
                 self.__break = 1
             if self.__break != 1:
                 utime.sleep(1)
@@ -416,7 +415,7 @@ class GPS(Singleton):
         return self.__gps_data
 
     @option_lock(_gps_read_lock)
-    def __internal_read(self):
+    def __internal_read(self, retry):
         """Read internal GPS data
 
         Return:
@@ -449,7 +448,7 @@ class GPS(Singleton):
         self.__gga_data = ""
         self.__vtg_data = ""
         self.__gsv_data = ""
-        self.__gps_data_check_timer.start(1000, 1, self.__gps_data_check_callback)
+        self.__gps_data_check_timer.start(2000, 1, self.__gps_data_check_callback)
         cycle = 0
         while self.__break == 0:
             self.__gps_timer.start(1500, 0, self.__gps_timer_callback)
@@ -470,7 +469,7 @@ class GPS(Singleton):
                     self.__break = 1
             self.__gps_timer.stop()
             cycle += 1
-            if cycle >= self.__retry:
+            if cycle >= retry:
                 if self.__break != 1:
                     self.__break = 1
             if self.__break != 1:
@@ -482,7 +481,7 @@ class GPS(Singleton):
         self.__internal_close()
         return self.__gps_data
 
-    def read(self):
+    def read(self, retry=100):
         """For user to read gps data
 
         Return: (res_code, gps_data)
@@ -508,9 +507,9 @@ class GPS(Singleton):
         """
         gps_data = ""
         if self.__gps_mode & _gps_mode.external:
-            gps_data = self.__external_read()
+            gps_data = self.__external_read(retry)
         elif self.__gps_mode & _gps_mode.internal:
-            gps_data = self.__internal_read()
+            gps_data = self.__internal_read(retry)
 
         res = 0 if gps_data else -1
         return (res, gps_data)
@@ -621,9 +620,8 @@ class CellLocator(object):
 
         server_cells = net.getCellInfo()
         if server_cells != -1 and isinstance(server_cells, tuple):
-            if len(server_cells) >= 3:
-                if server_cells[2] and isinstance(server_cells[2], list):
-                    server_cell = [i for i in server_cells[2] if i[0] == 0]
+            server_cell = server_cells
+
         res = 0 if near_cell or server_cell else -1
         return (res, {"near_cell": near_cell, "server_cell": server_cell})
 
@@ -758,7 +756,8 @@ class Location(Singleton):
             (117.1138, 31.82279, 550) or ()
         """
         if self.cellLoc:
-            return (self.cellLoc.read()[1], self.cellLoc.read()[2])
+            cell_loc_data = self.cellLoc.read()
+            return (cell_loc_data[1], cell_loc_data[2])
         return ()
 
     def __read_wifi(self):
@@ -768,7 +767,8 @@ class Location(Singleton):
             (117.1138, 31.82279, 550) or ()
         """
         if self.wifiLoc:
-            return (self.wifiLoc.read()[1], self.wifiLoc.read()[2])
+            wifi_loc_data = self.wifiLoc.read()
+            return (wifi_loc_data[1], wifi_loc_data[2])
         return ()
 
     def read(self, loc_method):

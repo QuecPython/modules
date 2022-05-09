@@ -39,16 +39,16 @@ class LED(object):
             return True
         return False
 
-    def led_timer_start(self):
+    def start_flicker(self):
         # __period is 0, not start led timer and stop led timer.
         if self.__period > 0:
-            self.led_timer_stop()
+            self.stop_flicker()
             if self.__led_timer.start(self.__period, 1, self.__led_timer_cb) == 0:
                 return True
 
         return False
 
-    def led_timer_stop(self):
+    def stop_flicker(self):
         return True if self.__led_timer.stop() == 0 else False
 
     def get_led_status(self):
@@ -67,6 +67,6 @@ class LED(object):
     def switch(self):
         # Auto Check LED Status ON To OFF or OFF To ON.
         if self.get_led_status() == 1:
-            self.set_led_status(0)
+            return self.set_led_status(0)
         else:
-            self.set_led_status(1)
+            return self.set_led_status(1)
