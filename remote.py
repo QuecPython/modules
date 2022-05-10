@@ -19,23 +19,29 @@ log = getLogger(__name__)
 
 
 class RemoteSubscribe(CloudObserver):
+    """This class is for distribute cloud downlink messages"""
     def __init__(self):
         self.__executor = None
 
     def __raw_data(self, *args, **kwargs):
+        """Handle cloud transparent data transmission."""
         return self.__executor.event_option(*args, **kwargs) if self.__executor else False
 
     def __object_model(self, *args, **kwargs):
+        """Handle cloud object model setting message"""
         log.debug("object_model args: %s, kwargs: %s" % (str(args), str(kwargs)))
         return self.__executor.event_done(*args, **kwargs) if self.__executor else False
 
     def __query(self, *args, **kwargs):
+        """Handle cloud object model quering message"""
         return self.__executor.event_query(*args, **kwargs) if self.__executor else False
 
     def __ota_plain(self, *args, **kwargs):
+        """Handle cloud OTA plain"""
         return self.__executor.event_ota_plain(*args, **kwargs) if self.__executor else False
 
     def __ota_file_download(self, *args, **kwargs):
+        """Handle cloud OTA file fragment download"""
         # TODO: To Download OTA File For MQTT Association (Not Support Now.)
         log.debug("ota_file_download: %s" % str(args))
         if self.__executor and hasattr(self.__executor, "ota_file_download"):
@@ -53,13 +59,14 @@ class RemoteSubscribe(CloudObserver):
         return self.__executor.event_rrpc_request(*args, **kwargs) if self.__executor else False
 
     def add_executor(self, executor):
+        """Add cloud downlink messages executor"""
         if executor:
             self.__executor = executor
             return True
         return False
 
     def execute(self, observable, *args, **kwargs):
-        """
+        """Get cloud downlink messages from cloud.
         1. observable: Cloud Iot Object.
         2. args[1]: Cloud DownLink Data Type.
         2.1 object_model: Set Cloud Object Model.
@@ -81,6 +88,14 @@ class RemoteSubscribe(CloudObserver):
 
 
 class RemotePublish(Observable):
+    """This class is for post data to cloud
+    Function:
+        1. Check OTA plain.
+        2. Confirm OTA upgrade.
+        3. Device & project version report.
+        4. RRPC response.
+        5. Publish object model data to cloud.
+    """
 
     def __init__(self):
         """
@@ -91,12 +106,15 @@ class RemotePublish(Observable):
         self.__cloud = None
 
     def __cloud_conn(self, enforce=False):
+        """Cloud connect"""
         return self.__cloud.init(enforce=enforce) if self.__cloud else False
 
     def __cloud_post(self, data):
+        """Cloud publish object model data"""
         return self.__cloud.post_data(data) if self.__cloud else False
 
     def add_cloud(self, cloud):
+        """Add Cloud object"""
         if hasattr(cloud, "init") and \
                 hasattr(cloud, "post_data") and \
                 hasattr(cloud, "ota_request") and \
@@ -106,15 +124,19 @@ class RemotePublish(Observable):
         return False
 
     def cloud_ota_check(self):
+        """Check ota plain"""
         return self.__cloud.ota_request() if self.__cloud else False
 
     def cloud_ota_action(self, action=1, module=None):
+        """Confirm ota upgrade"""
         return self.__cloud.ota_action(action, module) if self.__cloud else False
 
     def cloud_device_report(self):
+        """Device & project version report"""
         return self.__cloud.device_report() if self.__cloud else False
 
     def cloud_rrpc_response(self, message_id, data):
+        """RRPC response"""
         return self.__cloud.rrpc_response(message_id, data) if self.__cloud else False
 
     def post_data(self, data):

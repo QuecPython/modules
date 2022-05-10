@@ -107,44 +107,51 @@ class QuecObjectModel(CloudObjectModel):
     This class extend CloudObjectModel
 
     Attribute:
-        items:
-            - object model dictionary
-            - data format:
-            {
-                "event": {
-                    "name": "event",
-                    "id": "",
-                    "perm": "",
-                    "struct_info": {
-                        "name": "struct",
-                        "id": "",
-                        "struct_info": {
-                            "key": {
-                                "name": "key"
-                            }
-                        },
-                    },
-                },
-                "property": {
-                    "name": "event",
-                    "id": "",
-                    "perm": "",
-                    "struct_info": {}
+        events:
+            Attribute:
+                - object model event
+                - attribute value data format
+                {
+                    "sos_alert": {
+                        local_time: 0
+                    }
                 }
-            }
-        items_id:
+        properties:
+            Attribute:
+                - object model property
+                - attribute value data format
+                {
+                    "energy": 0,
+                    "power_switch": True
+                    "phone_num": ""
+                }
+        id_code:
             - queccloud object model id and name map
             - data format
             {
                 4: "energy",
                 9: "power_switch",
-                23: "phone_num",
+                23: "phone_num"
+            }
+        code_id:
+            - queccloud object model id and name map
+            - data format
+            {
+                "energy": 4,
+                "power_switch": 9,
+                "phone_num": 23
+            }
+        struct_code_id:
+            - data format
+            {
+                "sos_alert": {
+                    "local_time": 19
+                }
             }
     """
 
     def __init__(self, om_file="/usr/quec_object_model.json"):
         super().__init__(om_file)
-        self.items_id = {}
         self.code_id = {}
         self.id_code = {}
         self.struct_code_id = {}

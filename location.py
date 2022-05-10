@@ -250,6 +250,7 @@ class GPS(Singleton):
         return True
 
     def __reverse_gps_data(self, this_gps_data):
+        """Reverse GPS data for regular match get the latest data"""
         gps_datas = []
         delimiter = "\r\n"
         if self.__gps_data:

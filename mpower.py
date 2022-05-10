@@ -49,9 +49,11 @@ class LowEnergyManage(Observable):
         self.__low_energy_queue = Queue(maxsize=8)
 
     def __timer_callback(self, args):
+        """This callback is for interrupting sleep"""
         self.__low_energy_queue.put(self.__low_energy_method)
 
     def __low_energy_work(self, lowenergy_tag):
+        """This function is for notify Observers after interrupting sleep"""
         while True:
             data = self.__low_energy_queue.get()
             log.debug("__low_energy_work data: %s, lowenergy_tag: %s" % (data, lowenergy_tag))
@@ -70,6 +72,7 @@ class LowEnergyManage(Observable):
                     log.debug("pm.wakelock_unlock %s." % ("Success" if wulk_res == 0 else "Falied"))
 
     def __timer_init(self):
+        """Use RTC or osTimer for timer"""
         if RTC is not None:
             self.__timer = RTC()
         else:
@@ -78,10 +81,12 @@ class LowEnergyManage(Observable):
             self.__timer = osTimer()
 
     def __rtc_enable(self, enable):
+        """Enable or disable RTC"""
         enable_alarm_res = self.__timer.enable_alarm(enable)
         return True if enable_alarm_res == 0 else False
 
     def __rtc_start(self):
+        """Start low energy sleep by RTC"""
         self.__rtc_enable(0)
         atime = utime.localtime(utime.mktime(utime.localtime()) + self.__period)
         alarm_time = [atime[0], atime[1], atime[2], atime[6], atime[3], atime[4], atime[5], 0]
@@ -91,30 +96,53 @@ class LowEnergyManage(Observable):
         return False
 
     def __rtc_stop(self):
+        """Stop low energy sleep by RTC"""
         return self.__rtc_enable(0)
 
     def __timer_start(self):
+        """Start low energy sleep by osTimer"""
         res = self.__timer.start(self.__period * 1000, 0, self.__timer_callback)
         return True if res == 0 else False
 
     def __timer_stop(self):
+        """Stop low energy sleep by osTimer"""
         res = self.__timer.stop()
         log.debug("__timer_stop res: %s" % res)
         return True if res == 0 else False
 
     def get_period(self):
+        """Get low energy interrupting sleep period"""
         return self.__period
 
     def set_period(self, seconds=0):
+        """Set low energy interrupting sleep period
+        Parameter:
+            seconds: interrupting sleep period
+        """
         if isinstance(seconds, int) and seconds > 0:
             self.__period = seconds
             return True
         return False
 
     def get_low_energy_method(self):
+        """Get low energy method
+        Return:
+            NULL: No low energy
+            PM: wake lock
+            PSM: PSM
+            POWERDOWN: power down
+        """
         return self.__low_energy_method
 
     def set_low_energy_method(self, method):
+        """Set low energy method
+        Parameter:
+            method:
+                NULL: No low energy
+                PM: wake lock
+                PSM: PSM
+                POWERDOWN: power down
+        """
         if method in LOW_ENERGY_METHOD:
             if RTC is None and method in ("PSM", "POWERDOWN"):
                 return False
@@ -123,9 +151,11 @@ class LowEnergyManage(Observable):
         return False
 
     def get_lpm_fd(self):
+        """Get PM(wake lock) lock id"""
         return self.__lpm_fd
 
     def low_energy_init(self):
+        """Init low energy"""
         try:
             if self.__thread_id is not None:
                 _thread.stop_thread(self.__thread_id)
@@ -147,12 +177,14 @@ class LowEnergyManage(Observable):
             return False
 
     def start(self):
+        """Start low energy sleep"""
         if RTC is not None:
             return self.__rtc_start()
         else:
             return self.__timer_start()
 
     def stop(self):
+        """Stop low energy sleep"""
         if RTC is not None:
             return self.__rtc_stop()
         else:

@@ -48,6 +48,9 @@ class Battery(object):
         adc_num: ADC channel num
         adc_period: Cyclic read ADC cycle period
         factor: calculation coefficient
+
+    chrg_gpion: CHRG GPIOn
+    stdby_gpion: STDBY GPIOn
     """
     def __init__(self, adc_args=None, chrg_gpion=None, stdby_gpion=None):
         self.__energy = 100
@@ -78,16 +81,19 @@ class Battery(object):
             self.__init_charge()
 
     def __chrg_callback(self, args):
+        """Charge status change callback"""
         self.__update_charge_status()
         if self.__charge_callback is not None:
             self.__charge_callback(self.__charge_status)
 
     def __stdby_callback(self, args):
+        """Charge status change callback"""
         self.__update_charge_status()
         if self.__charge_callback is not None:
             self.__charge_callback(self.__charge_status)
 
     def __update_charge_status(self):
+        """Update Charge status by gpio status"""
         if self.__chrg_gpio.read() == 1 and self.__stdby_gpio.read() == 1:
             self.__charge_status = 0
         elif self.__chrg_gpio.read() == 0 and self.__stdby_gpio.read() == 1:
@@ -98,6 +104,7 @@ class Battery(object):
             raise TypeError("CHRG and STDBY cannot be 0 at the same time!")
 
     def __init_charge(self):
+        """Init charge Pin and ExtInt"""
         self.__chrg_gpio = Pin(self.__chrg_gpion, Pin.IN, Pin.PULL_DISABLE)
         self.__stdby_gpio = Pin(self.__stdby_gpion, Pin.IN, Pin.PULL_DISABLE)
         self.__chrg_exint = ExtInt(self.__chrg_gpion, ExtInt.IRQ_RISING_FALLING, ExtInt.PULL_PU, self.__chrg_callback)
@@ -138,9 +145,11 @@ class Battery(object):
                 return self.__get_soc_from_dict(20, volt_arg)
 
     def __get_power_vbatt(self):
+        """Get vbatt from power"""
         return int(sum([Power.getVbatt() for i in range(100)]) / 100)
 
     def __get_adc_vbatt(self):
+        """Get vbatt from adc"""
         self.__adc.open()
         utime.sleep_ms(self.__adc_period)
         adc_list = list()
@@ -174,6 +183,7 @@ class Battery(object):
         return self.__energy
 
     def set_charge_callback(self, charge_callback):
+        """Set charge status change callback"""
         if self.__chrg_gpion is not None and self.__stdby_gpion is not None:
             if callable(charge_callback):
                 self.__charge_callback = charge_callback
@@ -181,4 +191,11 @@ class Battery(object):
         return False
 
     def get_charge_status(self):
+        """Get charge status
+        Return:
+            0 - Not charged
+            1 - Charging
+            2 - Finished charging
+        """
+        self.__update_charge_status()
         return self.__charge_status

@@ -136,6 +136,7 @@ class History(Singleton):
 
     @option_lock(_history_lock)
     def clean(self):
+        """Remove history file."""
         try:
             uos.remove(self.__history)
             return True
@@ -143,4 +144,5 @@ class History(Singleton):
             return False
 
     def update(self, observable, *args, **kwargs):
+        """Observer option, write data to history file."""
         return self.write(list(args[1:]))
