@@ -69,7 +69,7 @@ def test_gps():
 
     gps_locator = GPS(_gps_cfg, gps_mode)
 
-    if _gps_cfg["PowerPin"] is not None:
+    if _gps_cfg["PowerPin"] is not None or gps_mode == 1:
         msg = "[test_gps] %s: GPS.power_switch(0) res: %s."
         power_switch_res = gps_locator.power_switch(0)
         assert power_switch_res, msg % ("FAILED", power_switch_res)
@@ -109,7 +109,7 @@ def test_gps():
         res["success"] += 1
 
     msg = "[test_gps] %s: GPS.read() gps_data: %s."
-    gps_data = gps_locator.read(retry=200)
+    gps_data = gps_locator.read(retry=2000)
     assert gps_data[0] == 0, msg % ("FAILED", gps_data)
     print(msg % ("SUCCESS", gps_data))
     res["success"] += 1

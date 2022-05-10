@@ -96,7 +96,7 @@ class GPSMatch(object):
         """Match Recommended Minimum Specific GPS/TRANSIT Data（RMC）"""
         if gps_data:
             rmc_re = ure.search(
-                r"\$G[NP]RMC,\d+\.\d+,[AV],\d+\.\d+,[NS],\d+\.\d+,[EW],\d+\.\d+,\d+\.\d+,\d+,\d*\.*\d*,[EW]*,[ADEN]*,[SCUV]*\**(\d|\w)*",
+                r"\$G[NP]RMC,\d+\.\d+,[AV],\d+\.\d+,[NS],\d+\.\d+,[EW],\d*\.*\d*,\d*\.*\d*,\d+,\d*\.*\d*,[EW]*,[ADEN]*,[SCUV]*\**(\d|\w)*",
                 gps_data)
             if rmc_re:
                 return rmc_re.group(0)
@@ -106,7 +106,7 @@ class GPSMatch(object):
         """Match Global Positioning System Fix Data（GGA）"""
         if gps_data:
             gga_re = ure.search(
-                r"\$G[BLPN]GGA,\d+\.\d+,\d+\.\d+,[NS],\d+\.\d+,[EW],[0126],\d+,\d+\.\d+,-*\d+\.\d+,M,-*\d+\.\d+,M,\d*,\**(\d|\w)*",
+                r"\$G[BLPN]GGA,\d+\.\d+,\d+\.\d+,[NS],\d+\.\d+,[EW],[0126],\d+,\d+\.\d+,-*\d+\.\d+,M,-*\d*\.*\d*,M,\d*,\**(\d|\w)*",
                 gps_data)
             if gga_re:
                 return gga_re.group(0)
@@ -115,7 +115,7 @@ class GPSMatch(object):
     def GxVTG(self, gps_data):
         """Match Track Made Good and Ground Speed（VTG）"""
         if gps_data:
-            vtg_re = ure.search(r"\$G[NP]VTG,\d+\.\d+,T,\d*\.*\d*,M,\d+\.\d+,N,\d+\.\d+,K,[ADEN]*\*(\d|\w)*", gps_data)
+            vtg_re = ure.search(r"\$G[NP]VTG,\d*\.*\d*,T,\d*\.*\d*,M,\d+\.\d+,N,\d+\.\d+,K,[ADEN]*\*(\d|\w)*", gps_data)
             if vtg_re:
                 return vtg_re.group(0)
         return ""
@@ -332,11 +332,13 @@ class GPS(Singleton):
     def __internal_open(self):
         """Internal GPS enable"""
         if self.__internal_obj.get_state() == 0:
-            self.__internal_obj.gnssEnable(1)
+            return True if self.__internal_obj.gnssEnable(1) == 0 else False
+        else:
+            return True
 
     def __internal_close(self):
         """Internal GPS close"""
-        self.__internal_obj.gnssEnable(0)
+        return True if self.__internal_obj.gnssEnable(0) == 0 else False
 
     @option_lock(_gps_read_lock)
     def __external_read(self, retry):
@@ -440,9 +442,9 @@ class GPS(Singleton):
             $BDGSV,5,5,18,29,02,075,,20,01,035,,1*72
             $GNGLL,3149.330773,N,11706.946971,E,073144.000,A,D*4E
         """
-        log.debug("__internal_open start.")
-        self.__internal_open()
-        log.debug("__internal_open end.")
+        # log.debug("__internal_open start.")
+        # self.__internal_open()
+        # log.debug("__internal_open end.")
 
         while self.__break == 0:
             gnss_data = quecgnss.read(1024)
@@ -484,7 +486,6 @@ class GPS(Singleton):
         self.__break = 0
 
         self.__gps_data_check_callback(None)
-        self.__internal_close()
         return self.__gps_data
 
     def read(self, retry=100):
@@ -544,10 +545,16 @@ class GPS(Singleton):
         Params:
             onoff: 0 -- off, 1 -- on
         """
-        if self.__gps_cfg.get("PowerPin") is not None:
-            return self.__gps_power_control(self.__gps_cfg["PowerPin"], onoff, "power_switch")
-        else:
-            return False
+        if self.__gps_mode & _gps_mode.external:
+            if self.__gps_cfg.get("PowerPin") is not None:
+                return self.__gps_power_control(self.__gps_cfg["PowerPin"], onoff, "power_switch")
+            else:
+                return False
+        elif self.__gps_mode & _gps_mode.internal:
+            if onoff == 0:
+                return self.__internal_close()
+            else:
+                return self.__internal_open()
 
     def backup(self, onoff):
         """GPS module low enery mode backup
