@@ -109,7 +109,7 @@ def test_gps():
         res["success"] += 1
 
     msg = "[test_gps] %s: GPS.read() gps_data: %s."
-    gps_data = gps_locator.read(retry=2000)
+    gps_data = gps_locator.read()
     assert gps_data[0] == 0, msg % ("FAILED", gps_data)
     print(msg % ("SUCCESS", gps_data))
     res["success"] += 1

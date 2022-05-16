@@ -95,30 +95,30 @@ def test_aliyuniot():
     print(msg % "SUCCESS")
     res["success"] += 1
 
-    msg = "[test_aliyuniot] %s: get_ali_loc_data(%s, %s) %s."
-    loc_method = _loc_method.gps
-    gps_mode = 2
-    _gps_cfg = {
-        "UARTn": UART.UART1,
-        "buadrate": 115200,
-        "databits": 8,
-        "parity": 0,
-        "stopbits": 1,
-        "flowctl": 0,
-    }
-    locator_init_params = {"gps_cfg": _gps_cfg}
+    # msg = "[test_aliyuniot] %s: get_ali_loc_data(%s, %s) %s."
+    # loc_method = _loc_method.gps
+    # gps_mode = 1
+    # _gps_cfg = {
+    #     "UARTn": UART.UART1,
+    #     "buadrate": 115200,
+    #     "databits": 8,
+    #     "parity": 0,
+    #     "stopbits": 1,
+    #     "flowctl": 0,
+    # }
+    # locator_init_params = {"gps_cfg": _gps_cfg}
 
-    locator = Location(gps_mode, locator_init_params)
-    loc_data = locator.read(loc_method)
-    ali_loc_data = get_ali_loc_data(loc_method, loc_data.get(loc_method))
-    assert ali_loc_data["GeoLocation"] != {}, msg % ("FAILED", loc_method, loc_data, ali_loc_data)
-    print(msg % ("SUCCESS", loc_method, loc_data, ali_loc_data))
-    res["success"] += 1
+    # locator = Location(gps_mode, locator_init_params)
+    # loc_data = locator.read(loc_method)
+    # ali_loc_data = get_ali_loc_data(loc_method, loc_data.get(loc_method))
+    # assert ali_loc_data["GeoLocation"] != {}, msg % ("FAILED", loc_method, loc_data, ali_loc_data)
+    # print(msg % ("SUCCESS", loc_method, loc_data, ali_loc_data))
+    # res["success"] += 1
 
-    msg = "[test_aliyuniot] %s: cloud.post_data(%s)."
-    assert cloud.post_data(ali_loc_data), msg % ("FAILED", str(ali_loc_data))
-    print(msg % ("SUCCESS", str(ali_loc_data)))
-    res["success"] += 1
+    # msg = "[test_aliyuniot] %s: cloud.post_data(%s)."
+    # assert cloud.post_data(ali_loc_data), msg % ("FAILED", str(ali_loc_data))
+    # print(msg % ("SUCCESS", str(ali_loc_data)))
+    # res["success"] += 1
 
     msg = "[test_aliyuniot] %s: cloud.ota_request()."
     assert cloud.ota_request(), msg % ("FAILED",)
@@ -135,10 +135,10 @@ def test_aliyuniot():
     # assert cloud.ota_action() is True, msg % ("FAILED",)
     # print(msg % ("SUCCESS",))
 
-    msg = "[test_aliyuniot] %s: cloud.close()."
-    assert cloud.close() and cloud.__ali.getAliyunSta() != 0, msg % "FAILED"
-    print(msg % "SUCCESS")
-    res["success"] += 1
+    # msg = "[test_aliyuniot] %s: cloud.close()."
+    # assert cloud.close() and cloud.__ali.getAliyunSta() != 0, msg % "FAILED"
+    # print(msg % "SUCCESS")
+    # res["success"] += 1
 
     res["all"] = res["success"] + res["failed"]
     print("[test_aliyuniot] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
@@ -205,5 +205,5 @@ def test_aliyun():
         __ali.start()
 
 if __name__ == "__main__":
-    # test_aliyuniot()
-    test_aliyun()
+    test_aliyuniot()
+    # test_aliyun()

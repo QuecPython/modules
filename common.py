@@ -163,6 +163,7 @@ class CloudObjectModel(Singleton):
             raise TypeError("File %s is not exists!" % self.om_file)
         self.events = type("events", (object,), {})
         self.properties = type("properties", (object,), {})
+        self.services = type("services", (object,), {})
 
     def __file_exist(self):
         try:

@@ -96,7 +96,7 @@ class GPSMatch(object):
         """Match Recommended Minimum Specific GPS/TRANSIT Data（RMC）"""
         if gps_data:
             rmc_re = ure.search(
-                r"\$G[NP]RMC,\d+\.\d+,[AV],\d+\.\d+,[NS],\d+\.\d+,[EW],\d*\.*\d*,\d*\.*\d*,\d+,\d*\.*\d*,[EW]*,[ADEN]*,[SCUV]*\**(\d|\w)*",
+                r"\$G[NP]RMC,\d*\.*\d*,[AV],\d*\.*\d*,[NS],\d*\.*\d*,[EW],\d*\.*\d*,\d*\.*\d*,\d*,\d*\.*\d*,[EW]*,[ADEN]*,[SCUV]*\**(\d|\w)*",
                 gps_data)
             if rmc_re:
                 return rmc_re.group(0)
@@ -106,7 +106,7 @@ class GPSMatch(object):
         """Match Global Positioning System Fix Data（GGA）"""
         if gps_data:
             gga_re = ure.search(
-                r"\$G[BLPN]GGA,\d+\.\d+,\d+\.\d+,[NS],\d+\.\d+,[EW],[0126],\d+,\d+\.\d+,-*\d+\.\d+,M,-*\d*\.*\d*,M,\d*,\**(\d|\w)*",
+                r"\$G[BLPN]GGA,\d*\.*\d*,\d*\.*\d*,[NS],\d*\.*\d*,[EW],[0126],\d*,\d*\.*\d*,-*\d*\.*\d*,M,-*\d*\.*\d*,M,\d*,\**(\d|\w)*",
                 gps_data)
             if gga_re:
                 return gga_re.group(0)
@@ -115,7 +115,7 @@ class GPSMatch(object):
     def GxVTG(self, gps_data):
         """Match Track Made Good and Ground Speed（VTG）"""
         if gps_data:
-            vtg_re = ure.search(r"\$G[NP]VTG,\d*\.*\d*,T,\d*\.*\d*,M,\d+\.\d+,N,\d+\.\d+,K,[ADEN]*\*(\d|\w)*", gps_data)
+            vtg_re = ure.search(r"\$G[NP]VTG,\d*\.*\d*,T,\d*\.*\d*,M,\d*\.*\d*,N,\d*\.*\d*,K,[ADEN]*\*(\d|\w)*", gps_data)
             if vtg_re:
                 return vtg_re.group(0)
         return ""
@@ -123,7 +123,7 @@ class GPSMatch(object):
     def GxGSV(self, gps_data):
         """Mactch GPS Satellites in View（GSV）"""
         if gps_data:
-            gsv_re = ure.search(r"\$G[NP]GSV,\d+,\d+,\d+,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*\**(\d|\w)*", gps_data)
+            gsv_re = ure.search(r"\$G[NP]GSV,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*\**(\d|\w)*", gps_data)
             if gsv_re:
                 return gsv_re.group(0)
         return ""
@@ -181,6 +181,14 @@ class GPSParse(object):
             if satellite_num_re:
                 return satellite_num_re.group(0).split(",")[-2]
         return ""
+
+    def GxRMC_loc_status(self, rmc_data):
+        if rmc_data:
+            loc_status_re = ure.search(r"\$G[NP]RMC,\d*\.*\d*,[AV],", rmc_data)
+            if loc_status_re:
+                loc_status = loc_status_re.group(0).split(",")[-2]
+            return True if loc_status == "A" else False
+        return False
 
 
 class GPS(Singleton):
@@ -341,7 +349,7 @@ class GPS(Singleton):
         return True if self.__internal_obj.gnssEnable(0) == 0 else False
 
     @option_lock(_gps_read_lock)
-    def __external_read(self, retry):
+    def __external_read(self):
         """Read external GPS data
 
         Return:
@@ -395,19 +403,21 @@ class GPS(Singleton):
                     log.debug("this_gps_data: %s" % this_gps_data)
                     if this_gps_data:
                         self.__gps_data = self.__reverse_gps_data(this_gps_data)
+
                     if not self.__rmc_data:
                         self.__rmc_data = self.__gps_match.GxRMC(self.__gps_data)
-                    if not self.__gga_data:
-                        self.__gga_data = self.__gps_match.GxGGA(self.__gps_data)
-                    if not self.__vtg_data:
-                        self.__vtg_data = self.__gps_match.GxVTG(self.__gps_data)
-                    if not self.__gsv_data:
-                        self.__gsv_data = self.__gps_match.GxGSV(self.__gps_data)
-                    if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
-                        self.__break = 1
+                    if self.__rmc_data and self.__gps_parse.GxRMC_loc_status(self.__rmc_data):
+                        if not self.__gga_data:
+                            self.__gga_data = self.__gps_match.GxGGA(self.__gps_data)
+                        if not self.__vtg_data:
+                            self.__vtg_data = self.__gps_match.GxVTG(self.__gps_data)
+                        if not self.__gsv_data:
+                            self.__gsv_data = self.__gps_match.GxGSV(self.__gps_data)
+                        if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
+                            self.__break = 1
             self.__gps_timer.stop()
             cycle += 1
-            if cycle >= retry:
+            if cycle >= self.__retry:
                 self.__break = 1
             if self.__break != 1:
                 utime.sleep(1)
@@ -421,7 +431,7 @@ class GPS(Singleton):
         return self.__gps_data
 
     @option_lock(_gps_read_lock)
-    def __internal_read(self, retry):
+    def __internal_read(self):
         log.debug("__internal_read start.")
         """Read internal GPS data
 
@@ -466,18 +476,20 @@ class GPS(Singleton):
                 log.debug("[second] this_gps_data: %s" % this_gps_data)
                 if this_gps_data:
                     self.__gps_data = self.__reverse_gps_data(this_gps_data)
+
                 if not self.__rmc_data:
                     self.__rmc_data = self.__gps_match.GxRMC(self.__gps_data)
-                if not self.__gga_data:
-                    self.__gga_data = self.__gps_match.GxGGA(self.__gps_data)
-                if not self.__vtg_data:
-                    self.__vtg_data = self.__gps_match.GxVTG(self.__gps_data)
-                if not self.__gsv_data:
-                    self.__gsv_data = self.__gps_match.GxGSV(self.__gps_data)
-                if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
-                    self.__break = 1
+                if self.__rmc_data and self.__gps_parse.GxRMC_loc_status(self.__rmc_data):
+                    if not self.__gga_data:
+                        self.__gga_data = self.__gps_match.GxGGA(self.__gps_data)
+                    if not self.__vtg_data:
+                        self.__vtg_data = self.__gps_match.GxVTG(self.__gps_data)
+                    if not self.__gsv_data:
+                        self.__gsv_data = self.__gps_match.GxGSV(self.__gps_data)
+                    if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
+                        self.__break = 1
             cycle += 1
-            if cycle >= retry:
+            if cycle >= self.__retry:
                 if self.__break != 1:
                     self.__break = 1
             if self.__break != 1:
@@ -512,11 +524,12 @@ class GPS(Singleton):
                 $BDGSV,5,5,18,29,02,075,,20,01,035,,1*72
                 $GNGLL,3149.330773,N,11706.946971,E,073144.000,A,D*4E
         """
+        self.__retry = retry
         gps_data = ""
         if self.__gps_mode & _gps_mode.external:
-            gps_data = self.__external_read(retry)
+            gps_data = self.__external_read()
         elif self.__gps_mode & _gps_mode.internal:
-            gps_data = self.__internal_read(retry)
+            gps_data = self.__internal_read()
 
         res = 0 if gps_data else -1
         return (res, gps_data)
@@ -551,6 +564,7 @@ class GPS(Singleton):
             else:
                 return False
         elif self.__gps_mode & _gps_mode.internal:
+            # TODO: Interal GNSS power down will not be used this api.
             if onoff == 0:
                 return self.__internal_close()
             else:
