@@ -577,7 +577,7 @@ class GPS(Singleton):
             onoff: 0 -- off, 1 -- on
         """
         if self.__gps_cfg.get("BackupPin") is not None:
-            return self.__gps_power_control(GPIOn, onoff, "backup")
+            return self.__gps_power_control(self.__gps_cfg.get("BackupPin"), onoff, "backup")
         else:
             return False
 

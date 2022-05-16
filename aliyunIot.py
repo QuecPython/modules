@@ -1060,6 +1060,7 @@ class AliOTA(object):
         }
         """
         upgrade_file = {}
+        self.__module = data["module"]
         if self.__module == self.__mcu_name:
             upgrade_file = data.get("extData", {}).get("_package_udi")
             if upgrade_file:
@@ -1075,7 +1076,6 @@ class AliOTA(object):
                 name = v
                 break
             files = [{"size": data["size"], "url": data["url"], "md5": data["md5"], "file_name": name}]
-        self.__module = data["module"]
         self.__version = data["version"]
         self.__files = files
 
