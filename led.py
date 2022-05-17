@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import utime
 import _thread
 import osTimer
 from machine import Pin
@@ -33,35 +34,37 @@ class LED(object):
         """
         self.__gpio = Pin(GPIOn, direction, pullMode, level)
         self.__period = 0
+        self.__count = 0
+        self.__runc = 0
+        self.__on_period = 0
+        self.__off_period = 5
         self.__led_timer = osTimer()
         self.__led_lock = _thread.allocate_lock()
 
     def __led_timer_cb(self, args):
         """LED flicker timer."""
-        self.switch()
+        if self.__count > 0:
+            self.__runc += 1
+            if self.__runc > self.__count:
+                self.__runc = 0
+                self.stop_flicker()
+                return
+        self.on()
+        utime.sleep_ms(self.__on_period)
+        self.off()
+        self.__led_timer.start(self.__off_period, 0, self.__led_timer_cb)
 
-    def get_period(self):
-        """Get LED flicker period."""
-        return self.__period
-
-    def set_period(self, period):
-        """Set LED flicker period.
-        Parameter:
-            period: flicker period. Unit: second.
-        """
-        if isinstance(period, int) and period >= 0:
-            self.__period = period
-            return True
-        return False
-
-    def start_flicker(self):
+    def start_flicker(self, on_period, off_period, count):
         """Start LED period
         note:
             __period is 0, not start led timer and stop led timer.
         """
-        if self.__period > 0:
+        self.__on_period = on_period
+        self.__off_period = off_period
+        self.__count = count
+        if self.__count >= 0 and self.__on_period > 0 and self.__off_period >= 5:
             self.stop_flicker()
-            if self.__led_timer.start(self.__period, 1, self.__led_timer_cb) == 0:
+            if self.__led_timer.start(self.__off_period, 0, self.__led_timer_cb) == 0:
                 return True
 
         return False
@@ -89,9 +92,15 @@ class LED(object):
         with self.__led_lock:
             return True if self.__gpio.write(onoff) == 0 else False
 
+    def on(self):
+        return self.set_led_status(1)
+
+    def off(self):
+        return self.set_led_status(0)
+
     def switch(self):
         """Auto Check LED Status ON To OFF or OFF To ON."""
         if self.get_led_status() == 1:
-            return self.set_led_status(0)
+            return self.off()
         else:
-            return self.set_led_status(1)
+            return self.on()
