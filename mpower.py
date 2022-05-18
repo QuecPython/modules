@@ -162,7 +162,6 @@ class LowEnergyManage(Observable):
             if self.__lpm_fd is not None:
                 pm.delete_wakelock(self.__lpm_fd)
                 self.__lpm_fd = None
-
             if self.__low_energy_method == "PM":
                 self.__thread_id = _thread.start_new_thread(self.__low_energy_work, (True,))
                 self.__lpm_fd = pm.create_wakelock(self.__pm_lock_name, len(self.__pm_lock_name))
@@ -170,7 +169,7 @@ class LowEnergyManage(Observable):
             elif self.__low_energy_method == "NULL":
                 self.__thread_id = _thread.start_new_thread(self.__low_energy_work, (False,))
             elif self.__low_energy_method in ("PSM", "POWERDOWN"):
-                pass
+                pm.autosleep(1)
             self.__timer_init()
             return True
         except:

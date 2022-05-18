@@ -537,7 +537,7 @@ class QuecThing(CloudObservable):
             log.debug("post_data om_data: %s" % str(om_data))
             if om_data is not False:
                 if v is not None:
-                    phymodelReport_res = quecIot.phymodelReport(1, om_data)
+                    phymodelReport_res = quecIot.phymodelReport(2, om_data)
                     if not phymodelReport_res:
                         res = False
                         break
