@@ -56,7 +56,7 @@ class RemoteSubscribe(CloudObserver):
             message_id: rrpc topic message id
             data: rrpc request body
         """
-        return self.__executor.event_rrpc_request(*args, **kwargs) if self.__executor else False
+        return self.__executor.rrpc_request(*args, **kwargs) if self.__executor else False
 
     def add_executor(self, executor):
         """Add cloud downlink messages executor"""

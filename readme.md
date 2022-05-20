@@ -2375,7 +2375,7 @@ remote_sub = RemoteSubscribe()
 > - `event_query` 物模型查询数据接收
 > - `event_ota_plain` OTA升级计划数据接收
 > - `event_ota_file_download` OTA文件分片下载数据接收
-> - `event_rrpc_request` RRPC请求消息数据接收
+> - `rrpc_request` RRPC请求消息数据接收
 
 示例:
 

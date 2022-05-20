@@ -41,7 +41,6 @@ class LED(object):
         self.__led_timer = osTimer()
         self.__led_lock = _thread.allocate_lock()
 
-
     def on(self):
         self.__led.write(1)
 
@@ -61,7 +60,7 @@ class LED(object):
         self.off()
         self.__led_timer.start(self.__off_period, 0, self.__led_timer_cb)
 
-    def start_flicker(self, on_period, off_period, count):
+    def start_flicker(self, on_period, off_period, count=0):
         """Start LED period
         note:
             __period is 0, not start led timer and stop led timer.
