@@ -25,8 +25,9 @@ class LED(object):
     """This class is for control LED"""
 
     def __init__(self, GPIOn, direction=Pin.OUT, pullMode=Pin.PULL_DISABLE, level=0):
-        """
-        Parameter:
+        """LED object init
+
+        Args:
             GPIOn: pin number
             direction: IN - input mode, OUT - output mode
             pullMode: PULL_DISABLE - float mode, PULL_PU - pull-up mode, PULL_PD - pull-down mode
@@ -42,9 +43,11 @@ class LED(object):
         self.__led_lock = _thread.allocate_lock()
 
     def on(self):
+        """Set led on"""
         self.__led.write(1)
 
     def off(self):
+        """Set led off"""
         self.__led.write(0)
 
     def __led_timer_cb(self, args):
@@ -61,9 +64,15 @@ class LED(object):
         self.__led_timer.start(self.__off_period, 0, self.__led_timer_cb)
 
     def start_flicker(self, on_period, off_period, count=0):
-        """Start LED period
-        note:
-            __period is 0, not start led timer and stop led timer.
+        """Start led flicker
+
+        Args:
+            on_period(int): led on time, unit: ms
+            off_period(int): led off time, unit: ms
+            count(int): flicker times, if count is 0, filcker forever. (default: {0})
+
+        Returns:
+            bool: True -- success; False -- falied.
         """
         self.__on_period = on_period
         self.__off_period = off_period
@@ -76,5 +85,9 @@ class LED(object):
         return False
 
     def stop_flicker(self):
-        """Stop LED period"""
+        """Stop LED flicker
+
+        Returns:
+            bool: True -- success; False -- falied.
+        """
         return True if self.__led_timer.stop() == 0 else False
