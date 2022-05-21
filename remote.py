@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import _thread
 from usr.modules.logging import getLogger
 from usr.modules.common import Observable, CloudObserver
 
@@ -65,6 +66,9 @@ class RemoteSubscribe(CloudObserver):
             return True
         return False
 
+    def __thread_execute(self, option_fun, opt_args, opt_kwargs):
+        return option_fun(*opt_args, **opt_kwargs)
+
     def execute(self, observable, *args, **kwargs):
         """Get cloud downlink messages from cloud.
         1. observable: Cloud Iot Object.
@@ -79,12 +83,12 @@ class RemoteSubscribe(CloudObserver):
         opt_attr = "__" + args[1]
         opt_args = args[2] if not isinstance(args[2], dict) else ()
         opt_kwargs = args[2] if isinstance(args[2], dict) else {}
+
         if hasattr(self, opt_attr):
             option_fun = getattr(self, opt_attr)
-            return option_fun(*opt_args, **opt_kwargs)
+            _thread.start_new_thread(self.__thread_execute, (option_fun, opt_args, opt_kwargs))
         else:
             log.error("RemoteSubscribe Has No Attribute [%s]." % opt_attr)
-            return False
 
 
 class RemotePublish(Observable):
