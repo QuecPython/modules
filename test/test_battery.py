@@ -1,5 +1,6 @@
+import utime
 import osTimer
-
+from machine import Pin
 from usr.modules.battery import Battery
 
 run_time = 0
@@ -40,5 +41,30 @@ def test_battery():
     print("[test_battery] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
 
 
+battery = Battery(chrg_gpion=Pin.GPIO20, stdby_gpion=Pin.GPIO30)
+
+
+def charge_callback(charge_status):
+    with open("/usr/charge_status", "a+") as f:
+        f.write("[%s] charge_status[%s] chrg_status[%s] stdby_status[%s]\n"
+                % (str(utime.localtime()), charge_status, battery.__chrg_gpio.read(), battery.__stdby_gpio.read()))
+
+
+def test_charge():
+    res = {"all": 0, "success": 0, "failed": 0}
+    with open("/usr/charge_status", "w") as f:
+        f.write("")
+
+    # msg = "[test_charge] battery.set_charge_callback() %s"
+    # set_cb_res = battery.set_charge_callback(charge_callback)
+    # assert set_cb_res, msg % set_cb_res
+    # print(msg % set_cb_res)
+    # res["success"] += 1
+
+    res["all"] = res["success"] + res["failed"]
+    print("[test_charge] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
+
+
 if __name__ == "__main__":
-    test_battery()
+    # test_battery()
+    test_charge()

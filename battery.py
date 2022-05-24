@@ -94,11 +94,13 @@ class Battery(object):
 
     def __update_charge_status(self):
         """Update Charge status by gpio status"""
-        if self.__chrg_gpio.read() == 1 and self.__stdby_gpio.read() == 1:
+        chrg_level = self.__chrg_gpio.read()
+        stdby_level = self.__stdby_gpio.read()
+        if chrg_level == 1 and stdby_level == 1:
             self.__charge_status = 0
-        elif self.__chrg_gpio.read() == 0 and self.__stdby_gpio.read() == 1:
+        elif chrg_level == 0 and stdby_level == 1:
             self.__charge_status = 1
-        elif self.__chrg_gpio.read() == 1 and self.__stdby_gpio.read() == 0:
+        elif chrg_level == 1 and stdby_level == 0:
             self.__charge_status = 2
         else:
             raise TypeError("CHRG and STDBY cannot be 0 at the same time!")
@@ -192,7 +194,7 @@ class Battery(object):
 
     def get_charge_status(self):
         """Get charge status
-        Return:
+        Returns:
             0 - Not charged
             1 - Charging
             2 - Finished charging
