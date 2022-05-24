@@ -232,7 +232,7 @@ class QuecThing(CloudObservable):
         6. cloud.close()
     """
 
-    def __init__(self, pk, ps, dk, ds, server, life_time=120, mcu_name="", mcu_version=""):
+    def __init__(self, pk, ps, dk, ds, server, life_time=120, mcu_name="", mcu_version="", mode=1):
         """
         1. Init parent class CloudObservable
         2. Init cloud connect params
@@ -246,6 +246,7 @@ class QuecThing(CloudObservable):
         self.__life_time = life_time
         self.__mcu_name = mcu_name
         self.__mcu_version = mcu_version
+        self.__mode = mode
         self.__object_model = None
 
         self.__ota = QuecOTA()
@@ -471,7 +472,7 @@ class QuecThing(CloudObservable):
         quecIot.setProductinfo(self.__pk, self.__ps)
         if self.__dk or self.__ds:
             quecIot.setDkDs(self.__dk, self.__ds)
-        quecIot.setServer(1, self.__server)
+        quecIot.setServer(self.__mode, self.__server)
         quecIot.setLifetime(self.__life_time)
         quecIot.setMcuVersion(self.__mcu_name, self.__mcu_version)
         quecIot.setConnmode(1)
