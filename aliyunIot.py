@@ -300,7 +300,7 @@ class AliYunIot(CloudObservable):
         return res
 
     def __subscribe_topic(self, topic, qos=0):
-        subscribe_res = self.__ali.subscribe(topic, qos=0)
+        subscribe_res = self.__ali.subscribe(topic, qos=0) if self.__ali else -1
         if subscribe_res == -1:
             raise TypeError("AliYun subscribe topic %s falied" % topic)
 
@@ -653,7 +653,7 @@ class AliYunIot(CloudObservable):
         """
         topic = self.rrpc_topic_response.format(message_id)
         pub_data = ujson.dumps(data) if isinstance(data, dict) else data
-        return self.__ali.publish(topic, pub_data, qos=0)
+        return self.__ali.publish(topic, pub_data, qos=0) if self.__ali else False
 
     def device_report(self):
         """Publish mcu and firmware name, version
@@ -730,7 +730,7 @@ class AliYunIot(CloudObservable):
                 "module": module
             }
         }
-        publish_res = self.__ali.publish(self.ota_topic_device_inform, ujson.dumps(publish_data), qos=0)
+        publish_res = self.__ali.publish(self.ota_topic_device_inform, ujson.dumps(publish_data), qos=0) if self.__ali else False
         log.debug("version: %s, module: %s, publish_res: %s" % (version, module, publish_res))
         return publish_res
 
@@ -763,7 +763,7 @@ class AliYunIot(CloudObservable):
                 "module": module,
             }
         }
-        publish_res = self.__ali.publish(self.ota_topic_device_progress, ujson.dumps(publish_data), qos=0)
+        publish_res = self.__ali.publish(self.ota_topic_device_progress, ujson.dumps(publish_data), qos=0) if self.__ali else False
         if publish_res:
             return self.__get_post_res(msg_id)
         else:
@@ -790,7 +790,7 @@ class AliYunIot(CloudObservable):
             },
             "method": "thing.ota.firmware.get"
         }
-        publish_res = self.__ali.publish(self.ota_topic_firmware_get, ujson.dumps(publish_data), qos=0)
+        publish_res = self.__ali.publish(self.ota_topic_firmware_get, ujson.dumps(publish_data), qos=0) if self.__ali else False
         log.debug("module: %s, publish_res: %s" % (module, publish_res))
         if publish_res:
             return self.__get_post_res(msg_id)
@@ -828,7 +828,7 @@ class AliYunIot(CloudObservable):
                 }
             }
         }
-        publish_res = self.__ali.publish(self.ota_topic_file_download, ujson.dumps(publish_data), qos=0)
+        publish_res = self.__ali.publish(self.ota_topic_file_download, ujson.dumps(publish_data), qos=0) if self.__ali else False
         if publish_res:
             return self.__get_post_res(msg_id)
         else:
