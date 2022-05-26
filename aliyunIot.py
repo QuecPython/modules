@@ -446,7 +446,7 @@ class AliYunIot(CloudObservable):
         for k, v in data.items():
             if hasattr(self.__object_model.properties, k):
                 property_params[k] = {
-                    "value": v,
+                    "value": v if not isinstance(v, bool) else int(v),
                     "time": utime.mktime(utime.localtime()) * 1000
                 }
             elif hasattr(self.__object_model.events, k):
