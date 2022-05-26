@@ -41,35 +41,64 @@ class LowEnergyManage(Observable):
         self.__timer = None
 
         self.__period = 60
+        self.__act_unit = 1
+        self.__act_time = 10
+        self.__tau_unit = 0
+        self.__tau_time = 0
         self.__low_energy_method = "PM"
         self.__thread_id = None
 
         self.__lpm_fd = None
         self.__pm_lock_name = "low_energy_pm_lock"
         self.__low_energy_queue = Queue(maxsize=8)
+        self.__psm_act_timer = osTimer()
 
     def __timer_callback(self, args):
         """This callback is for interrupting sleep"""
         self.__low_energy_queue.put(self.__low_energy_method)
 
-    def __low_energy_work(self, lowenergy_tag):
-        """This function is for notify Observers after interrupting sleep"""
+    def __low_energy_work(self):
+        """This function is for notify Observers after interrupting sleep
+
+        PM:
+            1. Check PM init.
+            2. Notify observers to run business.
+            3. Unlock wake lock.
+        PSM:
+            1. Start active timer.
+            2. Notify observers to run business.
+            3. When active timer run over, then start RTC or osTimer.
+        """
         while True:
             data = self.__low_energy_queue.get()
-            log.debug("__low_energy_work data: %s, lowenergy_tag: %s" % (data, lowenergy_tag))
+            log.debug("__low_energy_work data: %s" % data)
             if data:
-                if lowenergy_tag:
-                    if self.__lpm_fd is None:
-                        self.__lpm_fd = pm.create_wakelock(self.__pm_lock_name, len(self.__pm_lock_name))
-                        pm.autosleep(1)
+                if self.__low_energy_method == "PSM":
+                    self.__psm_running_timer()
+                if self.__low_energy_method == "PM":
+                    self.pm_init()
                     wlk_res = pm.wakelock_lock(self.__lpm_fd)
                     log.debug("pm.wakelock_lock %s." % ("Success" if wlk_res == 0 else "Falied"))
 
                 self.notifyObservers(self, *(data,))
 
-                if lowenergy_tag:
+                if self.__low_energy_method == "PM":
                     wulk_res = pm.wakelock_unlock(self.__lpm_fd)
                     log.debug("pm.wakelock_unlock %s." % ("Success" if wulk_res == 0 else "Falied"))
+
+    def __psm_tau_start(self, args):
+        self.start()
+
+    def __psm_running_timer(self):
+        act_seconds = 0
+        if self.__act_uint == 2:
+            act_seconds = self.__act_time * 600
+        elif self.__act_uint == 1:
+            act_seconds = self.__act_time * 60
+        else:
+            act_seconds = self.__act_time * 2
+        self.__psm_act_timer.stop()
+        self.__psm_act_timer.start(act_seconds * 1000, 0, self.__psm_tau_start)
 
     def __timer_init(self):
         """Use RTC or osTimer for timer"""
@@ -124,6 +153,43 @@ class LowEnergyManage(Observable):
             return True
         return False
 
+    def set_act_time(self, seconds):
+        if isinstance(seconds, int) and seconds > 0:
+            if seconds % 600 == 0:
+                self.__act_unit = 2
+                self.__act_time = int(seconds / 600)
+            elif seconds % 60 == 0:
+                self.__act_unit = 1
+                self.__act_time = int(seconds / 600)
+            else:
+                self.__act_unit = 0
+                self.__act_time = int(seconds / 2)
+            return True
+        return False
+
+    def __set_tau_time(self):
+        if self.__period % (320 * 3600) == 0:
+            self.__tau_unit = 6
+            self.__tau_time = int(self.__period / (320 * 3600))
+        elif self.__period % (10 * 3600) == 0:
+            self.__tau_unit = 2
+            self.__tau_time = int(self.__period / (10 * 3600))
+        elif self.__period % 3600 == 0:
+            self.__tau_unit = 1
+            self.__tau_time = int(self.__period / 3600)
+        if self.__period % 600 == 0:
+            self.__tau_unit = 0
+            self.__tau_time = int(self.__period / 600)
+        elif self.__period % 60 == 0:
+            self.__tau_unit = 5
+            self.__tau_time = int(self.__period / 60)
+        elif self.__period % 30 == 0:
+            self.__tau_unit = 4
+            self.__tau_time = int(self.__period / 30)
+        else:
+            self.__tau_unit = 3
+            self.__tau_time = int(self.__period / 2)
+
     def get_low_energy_method(self):
         """Get low energy method
         Return:
@@ -154,6 +220,20 @@ class LowEnergyManage(Observable):
         """Get PM(wake lock) lock id"""
         return self.__lpm_fd
 
+    def psm_init(self):
+        self.__set_tau_time()
+        pm.autosleep(1)
+        get_psm_res = pm.get_psm_time()
+        if get_psm_res[1:] == [self.__tau_unit, self.__tau_time, self.__act_uint, self.__act_time]:
+            return True
+        else:
+            return pm.set_psm_time(self.__tau_unit, self.__tau_time, self.__act_uint, self.__act_time)
+
+    def pm_init(self):
+        if self.__lpm_fd is None:
+            pm.autosleep(1)
+            self.__lpm_fd = pm.create_wakelock(self.__pm_lock_name, len(self.__pm_lock_name))
+
     def low_energy_init(self):
         """Init low energy"""
         try:
@@ -163,12 +243,14 @@ class LowEnergyManage(Observable):
                 pm.delete_wakelock(self.__lpm_fd)
                 self.__lpm_fd = None
 
-            if self.__low_energy_method in ("PM", "PSM"):
-                self.__thread_id = _thread.start_new_thread(self.__low_energy_work, (True,))
-                self.__lpm_fd = pm.create_wakelock(self.__pm_lock_name, len(self.__pm_lock_name))
-                pm.autosleep(1)
+            self.__thread_id = _thread.start_new_thread(self.__low_energy_work, ())
+            if self.__low_energy_method == "PM":
+                self.pm_init()
+            elif self.__low_energy_method == "PSM":
+                self.psm_init()
+                self.__psm_running_timer()
             elif self.__low_energy_method in ("NULL", "POWERDOWN"):
-                self.__thread_id = _thread.start_new_thread(self.__low_energy_work, (False,))
+                pass
 
             self.__timer_init()
             return True
