@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import pm
+import net
 import utime
 import _thread
 import osTimer
@@ -41,8 +42,8 @@ class LowEnergyManage(Observable):
         self.__timer = None
 
         self.__period = 60
-        self.__act_unit = 1
-        self.__act_time = 10
+        self.__act_unit = 0
+        self.__act_time = 5
         self.__tau_unit = 0
         self.__tau_time = 0
         self.__low_energy_method = "PM"
@@ -51,7 +52,6 @@ class LowEnergyManage(Observable):
         self.__lpm_fd = None
         self.__pm_lock_name = "low_energy_pm_lock"
         self.__low_energy_queue = Queue(maxsize=8)
-        self.__psm_act_timer = osTimer()
 
     def __timer_callback(self, args):
         """This callback is for interrupting sleep"""
@@ -64,17 +64,11 @@ class LowEnergyManage(Observable):
             1. Check PM init.
             2. Notify observers to run business.
             3. Unlock wake lock.
-        PSM:
-            1. Start active timer.
-            2. Notify observers to run business.
-            3. When active timer run over, then start RTC or osTimer.
         """
         while True:
             data = self.__low_energy_queue.get()
             log.debug("__low_energy_work data: %s" % data)
             if data:
-                if self.__low_energy_method == "PSM":
-                    self.__psm_running_timer()
                 if self.__low_energy_method == "PM":
                     self.pm_init()
                     wlk_res = pm.wakelock_lock(self.__lpm_fd)
@@ -85,20 +79,6 @@ class LowEnergyManage(Observable):
                 if self.__low_energy_method == "PM":
                     wulk_res = pm.wakelock_unlock(self.__lpm_fd)
                     log.debug("pm.wakelock_unlock %s." % ("Success" if wulk_res == 0 else "Falied"))
-
-    def __psm_tau_start(self, args):
-        self.start()
-
-    def __psm_running_timer(self):
-        act_seconds = 0
-        if self.__act_uint == 2:
-            act_seconds = self.__act_time * 600
-        elif self.__act_uint == 1:
-            act_seconds = self.__act_time * 60
-        else:
-            act_seconds = self.__act_time * 2
-        self.__psm_act_timer.stop()
-        self.__psm_act_timer.start(act_seconds * 1000, 0, self.__psm_tau_start)
 
     def __timer_init(self):
         """Use RTC or osTimer for timer"""
@@ -139,6 +119,32 @@ class LowEnergyManage(Observable):
         log.debug("__timer_stop res: %s" % res)
         return True if res == 0 else False
 
+    def __set_tau_time(self):
+        if self.__period % (320 * 3600) == 0:
+            self.__tau_unit = 6
+            self.__tau_time = int(self.__period / (320 * 3600))
+        elif self.__period % (10 * 3600) == 0:
+            self.__tau_unit = 2
+            self.__tau_time = int(self.__period / (10 * 3600))
+        elif self.__period % 3600 == 0:
+            self.__tau_unit = 1
+            self.__tau_time = int(self.__period / 3600)
+        if self.__period % 600 == 0:
+            self.__tau_unit = 0
+            self.__tau_time = int(self.__period / 600)
+        elif self.__period % 60 == 0:
+            self.__tau_unit = 5
+            self.__tau_time = int(self.__period / 60)
+        elif self.__period % 30 == 0:
+            self.__tau_unit = 4
+            self.__tau_time = int(self.__period / 30)
+        else:
+            self.__tau_unit = 3
+            self.__tau_time = int(self.__period / 2)
+
+    def __psm_stop(self):
+        return pm.set_psm_time(0)
+
     def get_period(self):
         """Get low energy interrupting sleep period"""
         return self.__period
@@ -166,29 +172,6 @@ class LowEnergyManage(Observable):
                 self.__act_time = int(seconds / 2)
             return True
         return False
-
-    def __set_tau_time(self):
-        if self.__period % (320 * 3600) == 0:
-            self.__tau_unit = 6
-            self.__tau_time = int(self.__period / (320 * 3600))
-        elif self.__period % (10 * 3600) == 0:
-            self.__tau_unit = 2
-            self.__tau_time = int(self.__period / (10 * 3600))
-        elif self.__period % 3600 == 0:
-            self.__tau_unit = 1
-            self.__tau_time = int(self.__period / 3600)
-        if self.__period % 600 == 0:
-            self.__tau_unit = 0
-            self.__tau_time = int(self.__period / 600)
-        elif self.__period % 60 == 0:
-            self.__tau_unit = 5
-            self.__tau_time = int(self.__period / 60)
-        elif self.__period % 30 == 0:
-            self.__tau_unit = 4
-            self.__tau_time = int(self.__period / 30)
-        else:
-            self.__tau_unit = 3
-            self.__tau_time = int(self.__period / 2)
 
     def get_low_energy_method(self):
         """Get low energy method
@@ -222,12 +205,16 @@ class LowEnergyManage(Observable):
 
     def psm_init(self):
         self.__set_tau_time()
+        self.__psm_stop()
         pm.autosleep(1)
-        get_psm_res = pm.get_psm_time()
-        if get_psm_res[1:] == [self.__tau_unit, self.__tau_time, self.__act_uint, self.__act_time]:
-            return True
-        else:
-            return pm.set_psm_time(self.__tau_unit, self.__tau_time, self.__act_uint, self.__act_time)
+        if pm.set_psm_time(self.__tau_unit, self.__tau_time, self.__act_uint, self.__act_time):
+            get_psm_res = pm.get_psm_time()
+            if get_psm_res[1:] == [self.__tau_unit, self.__tau_time, self.__act_uint, self.__act_time]:
+                net.setModemFun(0, 0)
+                utime.sleep_ms(300)
+                net.setModemFun(1, 0)
+                return True
+        return False
 
     def pm_init(self):
         if self.__lpm_fd is None:
@@ -248,7 +235,6 @@ class LowEnergyManage(Observable):
                 self.pm_init()
             elif self.__low_energy_method == "PSM":
                 self.psm_init()
-                self.__psm_running_timer()
             elif self.__low_energy_method in ("NULL", "POWERDOWN"):
                 pass
 
@@ -259,14 +245,19 @@ class LowEnergyManage(Observable):
 
     def start(self):
         """Start low energy sleep"""
-        if RTC is not None:
-            return self.__rtc_start()
-        else:
-            return self.__timer_start()
+        if self.__low_energy_method != "PSM":
+            if RTC is not None:
+                return self.__rtc_start()
+            else:
+                return self.__timer_start()
+        return True
 
     def stop(self):
         """Stop low energy sleep"""
-        if RTC is not None:
-            return self.__rtc_stop()
+        if self.__low_energy_method != "PSM":
+            if RTC is not None:
+                return self.__rtc_stop()
+            else:
+                return self.__timer_stop()
         else:
-            return self.__timer_stop()
+            return self.__psm_stop()
