@@ -18,7 +18,6 @@ import ql_fs
 import ujson
 import utime
 import osTimer
-import quecIot
 import uhashlib
 import ubinascii
 import app_fota_download
@@ -28,6 +27,11 @@ from queue import Queue
 
 from usr.modules.logging import getLogger
 from usr.modules.common import CloudObservable, CloudObjectModel
+
+try:
+    import quecIot
+except ImportError:
+    quecIot = None
 
 log = getLogger(__name__)
 

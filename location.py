@@ -39,6 +39,7 @@ except ImportError:
 log = getLogger(__name__)
 
 _gps_read_lock = _thread.allocate_lock()
+_gps_data_set_lock = _thread.allocate_lock()
 
 EE = 0.00669342162296594323
 EARTH_RADIUS = 6378.137  # Approximate Earth Radius(km)
@@ -259,14 +260,15 @@ class GPS(Singleton):
 
     def __reverse_gps_data(self, this_gps_data):
         """Reverse GPS data for regular match get the latest data"""
-        gps_datas = []
+        log.debug("this_gps_data: \n%s" % this_gps_data)
         delimiter = "\r\n"
-        if self.__gps_data:
-            self.__gps_data = delimiter.join(self.__gps_data.split(delimiter)[::-1])
         if this_gps_data:
-            self.__gps_data += this_gps_data.strip().replace("\r", "").replace("\n", "").replace("$", delimiter + "$")
-            self.__gps_data = delimiter.join(self.__gps_data.split(delimiter)[::-1])
-        return self.__gps_data
+            _gps_data = self.__get_gps_data()
+            if _gps_data:
+                _gps_data = delimiter.join(_gps_data.split(delimiter)[::-1])
+            _gps_data += this_gps_data.strip().replace("\r", "").replace("\n", "").replace("$", delimiter + "$")
+            _gps_data = delimiter.join(_gps_data.split(delimiter)[::-1])
+            self.__set_gps_data(_gps_data)
 
     def __read_latitude(self, gps_data):
         """Read latitude from gps data"""
@@ -279,6 +281,14 @@ class GPS(Singleton):
     def __read_altitude(self, gps_data):
         """Read altitude from gps data"""
         return self.__gps_parse.GxGGA_altitude(self.__gps_match.GxGGA(gps_data))
+
+    @option_lock(_gps_data_set_lock)
+    def __set_gps_data(self, gps_data):
+        self.__gps_data = gps_data
+
+    @option_lock(_gps_data_set_lock)
+    def __get_gps_data(self):
+        return self.__gps_data
 
     def __gps_timer_callback(self, args):
         """GPS read timer callback
@@ -293,7 +303,7 @@ class GPS(Singleton):
         When GPS read over time, clean old gps data, wait to read new gps data.
         """
         if "" in (self.__rmc_data, self.__gga_data, self.__vtg_data, self.__gsv_data):
-            self.__gps_data = ""
+            self.__set_gps_data("")
             self.__rmc_data = ""
             self.__gga_data = ""
             self.__vtg_data = ""
@@ -380,11 +390,11 @@ class GPS(Singleton):
                 to_read = self.__external_obj.any()
                 log.debug("[first] to_read: %s" % to_read)
                 if to_read > 0:
-                    self.__gps_data = self.__external_obj.read(to_read).decode()
+                    self.__set_gps_data(self.__external_obj.read(to_read).decode())
             self.__gps_timer.stop()
         self.__break = 0
 
-        self.__gps_data = ""
+        self.__set_gps_data("")
         self.__rmc_data = ""
         self.__gga_data = ""
         self.__vtg_data = ""
@@ -399,20 +409,17 @@ class GPS(Singleton):
                 to_read = self.__external_obj.any()
                 log.debug("[second] to_read: %s" % to_read)
                 if to_read > 0:
-                    this_gps_data = self.__external_obj.read(to_read).decode()
-                    log.debug("this_gps_data: %s" % this_gps_data)
-                    if this_gps_data:
-                        self.__gps_data = self.__reverse_gps_data(this_gps_data)
+                    self.__reverse_gps_data(self.__external_obj.read(to_read).decode())
 
                     if not self.__rmc_data:
-                        self.__rmc_data = self.__gps_match.GxRMC(self.__gps_data)
+                        self.__rmc_data = self.__gps_match.GxRMC(self.__get_gps_data())
                     if self.__rmc_data and self.__gps_parse.GxRMC_loc_status(self.__rmc_data):
                         if not self.__gga_data:
-                            self.__gga_data = self.__gps_match.GxGGA(self.__gps_data)
+                            self.__gga_data = self.__gps_match.GxGGA(self.__get_gps_data())
                         if not self.__vtg_data:
-                            self.__vtg_data = self.__gps_match.GxVTG(self.__gps_data)
+                            self.__vtg_data = self.__gps_match.GxVTG(self.__get_gps_data())
                         if not self.__gsv_data:
-                            self.__gsv_data = self.__gps_match.GxGSV(self.__gps_data)
+                            self.__gsv_data = self.__gps_match.GxGSV(self.__get_gps_data())
                         if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
                             self.__break = 1
             self.__gps_timer.stop()
@@ -427,8 +434,8 @@ class GPS(Singleton):
         # To check GPS data is usable or not.
         self.__gps_data_check_callback(None)
         self.__external_close()
-        log.debug("__external_read data: %s" % self.__gps_data)
-        return self.__gps_data
+        log.debug("__external_read data: %s" % self.__get_gps_data())
+        return self.__get_gps_data()
 
     @option_lock(_gps_read_lock)
     def __internal_read(self):
@@ -462,7 +469,7 @@ class GPS(Singleton):
                 self.__break = 1
         self.__break = 0
 
-        self.__gps_data = ""
+        self.__set_gps_data("")
         self.__rmc_data = ""
         self.__gga_data = ""
         self.__vtg_data = ""
@@ -473,19 +480,17 @@ class GPS(Singleton):
             gnss_data = quecgnss.read(1024)
             if gnss_data and gnss_data[1]:
                 this_gps_data = gnss_data[1].decode() if len(gnss_data) > 1 and gnss_data[1] else ""
-                log.debug("[second] this_gps_data: %s" % this_gps_data)
-                if this_gps_data:
-                    self.__gps_data = self.__reverse_gps_data(this_gps_data)
+                self.__reverse_gps_data(this_gps_data)
 
                 if not self.__rmc_data:
-                    self.__rmc_data = self.__gps_match.GxRMC(self.__gps_data)
+                    self.__rmc_data = self.__gps_match.GxRMC(self.__get_gps_data())
                 if self.__rmc_data and self.__gps_parse.GxRMC_loc_status(self.__rmc_data):
                     if not self.__gga_data:
-                        self.__gga_data = self.__gps_match.GxGGA(self.__gps_data)
+                        self.__gga_data = self.__gps_match.GxGGA(self.__get_gps_data())
                     if not self.__vtg_data:
-                        self.__vtg_data = self.__gps_match.GxVTG(self.__gps_data)
+                        self.__vtg_data = self.__gps_match.GxVTG(self.__get_gps_data())
                     if not self.__gsv_data:
-                        self.__gsv_data = self.__gps_match.GxGSV(self.__gps_data)
+                        self.__gsv_data = self.__gps_match.GxGSV(self.__get_gps_data())
                     if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
                         self.__break = 1
             cycle += 1
@@ -498,9 +503,9 @@ class GPS(Singleton):
         self.__break = 0
 
         self.__gps_data_check_callback(None)
-        return self.__gps_data
+        return self.__get_gps_data()
 
-    def read(self, retry=100):
+    def read(self, retry=30):
         """For user to read gps data
 
         Return: (res_code, gps_data)
