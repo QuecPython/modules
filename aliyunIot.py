@@ -450,8 +450,18 @@ class AliYunIot(CloudObservable):
                     "time": utime.mktime(utime.localtime()) * 1000
                 }
             elif hasattr(self.__object_model.events, k):
+                event_value = {}
+                if v:
+                    for v_k, v_v in v.items():
+                        if v_k in self.__object_model.events.k:
+                            if isinstance(v_v, type(self.__object_model.events.k[v_k])):
+                                event_value.update({v_k: v_v})
+                            else:
+                                log.error("Type of %s's value is %s, not %s. So pass." % (type(self.__object_model.events.k[v_k]), v_k, type(v_v)))
+                        else:
+                            log.error("Key %s is not in event %s output. So pass." % (v_k, k))
                 event_params[k] = {
-                    "value": {},
+                    "value": event_value,
                     "time": utime.mktime(utime.localtime()) * 1000
                 }
             elif hasattr(self.__object_model.services, k):
