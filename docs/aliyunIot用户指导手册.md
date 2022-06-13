@@ -12,8 +12,8 @@
 ### AliObjectModel
 
 > - 该模块是将阿里云导出的json格式的精简物模型数据转化成一个物模型类, 方便使用;
-> - 该类初始化完成后有三个属性, 为`properties`, `events`, `service`, 且每个属性为一个对象;
-> - 物模型具体的key值为`properties`, `events`, `service`对象的属性, 属性值为默认的数据类型值;
+> - 该类初始化完成后有三个属性, 为`properties`, `events`, `services`, 且每个属性为一个对象;
+> - 物模型具体的key值为`properties`, `events`, `services`对象的属性, 属性值为默认的数据类型值;
 
 示例:
 
@@ -29,7 +29,7 @@ print(ali_object_model.properties.GeoLocation)
 # {"GeoLocation": {"Longitude": 0.0, "Latitude": 0.0, "Altitude": 0.0, "CoordinateSystem": 0}}
 print(ali_object_model.events.sos_alert)
 # {"sos_alert": {"local_time": 0, "GeoLocation": {"Longitude": 0.0, "Latitude": 0.0, "Altitude": 0.0, "CoordinateSystem": 0}}}
-print(ali_object_model.service.query_device_info)
+print(ali_object_model.services.query_device_info)
 # {"input": {"GeoLocation": {}}, "output": {"GeoLocation": {"Longitude": 0.0, "Latitude": 0.0, "Altitude": 0.0, "CoordinateSystem": 0}}}
 ```
 
