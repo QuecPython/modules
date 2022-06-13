@@ -11,7 +11,9 @@
 
 ### AliObjectModel
 
-> 该模块是将阿里云导出的json格式的精简物模型数据转化成一个物模型类，方便使用
+> - 该模块是将阿里云导出的json格式的精简物模型数据转化成一个物模型类, 方便使用;
+> - 该类初始化完成后有三个属性, 为`properties`, `events`, `service`, 且每个属性为一个对象;
+> - 物模型具体的key值为`properties`, `events`, `service`对象的属性, 属性值为默认的数据类型值;
 
 示例:
 
@@ -27,17 +29,19 @@ print(ali_object_model.properties.GeoLocation)
 # {"GeoLocation": {"Longitude": 0.0, "Latitude": 0.0, "Altitude": 0.0, "CoordinateSystem": 0}}
 print(ali_object_model.events.sos_alert)
 # {"sos_alert": {"local_time": 0, "GeoLocation": {"Longitude": 0.0, "Latitude": 0.0, "Altitude": 0.0, "CoordinateSystem": 0}}}
+print(ali_object_model.service.query_device_info)
+# {"input": {"GeoLocation": {}}, "output": {"GeoLocation": {"Longitude": 0.0, "Latitude": 0.0, "Altitude": 0.0, "CoordinateSystem": 0}}}
 ```
 
 参数:
 
 |参数|类型|说明|
 |:---|---|---|
-|om_file|STRING|物模型文件全路径地址，可选，默认`/usr/aliyun_object_model.json`|
+|om_file|STRING|物模型文件全路径地址, 可选, 默认`/usr/aliyun_object_model.json`|
 
 ### AliYunIot
 
-> 还模块主要提供阿里云物联网模块的连接，消息的发送，消息订阅，OTA升级功能。
+> 还模块主要提供阿里云物联网模块的连接, 消息的发送, 消息订阅, OTA升级功能。
 > 
 > 该功能以监听者模式进行设计, 本身既是监听者, 亦是被监听者
 > 
@@ -177,7 +181,7 @@ res = ali.post_data(data)
 
 |参数|类型|说明|
 |:---|---|---|
-|data|DICT|物模型key，value值|
+|data|DICT|物模型key, value值|
 
 ```json
 {
@@ -268,7 +272,7 @@ res = ali.ota_action(action, module)
 |参数|类型|说明|
 |:---|---|---|
 |action|INT| 0 取消升级, 1 确认升级|
-|module|STRING|升级模块，固件名或项目名|
+|module|STRING|升级模块, 固件名或项目名|
 
 返回值:
 
@@ -310,7 +314,7 @@ res = ali.ota_device_progress(step, desc, module)
 |参数|类型|说明|
 |:---|---|---|
 |step|STRING| OTA升级进度。取值范围：1~100的整数：升级进度百分比。-1：升级失败。-2：下载失败。-3：校验失败。-4：烧写失败。 |
-|desc|STRING| 当前步骤的描述信息，长度不超过128个字符。如果发生异常，此字段可承载错误信息。 |
+|desc|STRING| 当前步骤的描述信息, 长度不超过128个字符。如果发生异常, 此字段可承载错误信息。 |
 |module|STRING| 升级包所属的模块名。 |
 
 返回值:
@@ -354,7 +358,7 @@ res = ali.ota_file_download(fileToken, streamId, fileId, size, offset)
 |fileToken|STRING|文件的唯一标识Token |
 |streamId|STRING|通过MQTT协议下载OTA升级包时的唯一标识。 |
 |fileId|STRING|单个升级包文件的唯一标识。 |
-|size|STRING|请求下载的文件分片大小，单位字节。取值范围为256 B~131072 B。若为最后一个文件分片，取值范围1 B~131072 B。 |
+|size|STRING|请求下载的文件分片大小, 单位字节。取值范围为256 B~131072 B。若为最后一个文件分片, 取值范围1 B~131072 B。 |
 |offset|STRING|文件分片对应字节的起始地址。取值范围为0~16777216。 |
 
 返回值:

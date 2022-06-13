@@ -19,6 +19,11 @@
 > 功耗大小排序
 > 
 > PM > PSM > PWOERDOWN
+> 
+> **注意**
+> 
+> - 当设备只支持osTimer定时器，不支持RTC定时器时，设备只支持PM(wake_lock)低功耗模式
+> - 当设备支持RTC模式时，需确认设备是否支持PSM或POWERDOWN通过RTC唤醒，支持才可使用该种低功耗模式, 设备支持休眠模式表见`common`模块中的`LOWENERGYMAP`
 
 ## 功能接口说明
 

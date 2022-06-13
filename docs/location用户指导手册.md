@@ -348,7 +348,7 @@ gps = GPS(gps_cfg, gps_mode)
 
 |参数|类型|说明|
 |:---|---|---|
-|gps_cfg|DICT|外置GPS读取uart配置信息|
+|gps_cfg|DICT|外置GPS读取uart配置信息, 内置GPS可以传空字典|
 |gps_mode|INT|1 - 内置GPS, 2 - 外置GPS|
 
 #### read 读取GPS数据

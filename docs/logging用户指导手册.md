@@ -6,6 +6,28 @@
 
 ## 功能接口说明
 
+### getLogger 返回日志实例对象
+
+示例:
+
+```python
+from logging import getLogger
+
+log = getLogger("test_log")
+```
+
+参数:
+
+|参数|类型|说明|
+|:---|---|---|
+|name|STRING|日志模块名|
+
+返回值:
+
+|数据类型|说明|
+|:---|---|
+|OBJECT|`Logger`实例对象|
+
 ### Logger 日志模块
 
 #### 模块导入
@@ -194,25 +216,3 @@ log.critical("critical log")
 返回值:
 
 无
-
-### getLogger 返回日志实例对象
-
-示例:
-
-```python
-from logging import getLogger
-
-log = getLogger("test_log")
-```
-
-参数:
-
-|参数|类型|说明|
-|:---|---|---|
-|name|STRING|日志模块名|
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|OBJECT|`Logger`实例对象|

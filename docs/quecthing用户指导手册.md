@@ -2,13 +2,18 @@
 
 ## 简介
 
-> 该模块用于提供移远云物联网模块相关功能，MQTT协议的消息发布与订阅, OTA升级。
+> 该模块为移远云物联网功能模块, 主要有一下两个功能
+>
+> - 物模型导入转化类
+> - MQTT协议的消息发布与订阅, OTA升级。
 
 ## 功能接口说明
 
 ### QuecObjectModel
 
-> 该模块是将移远云导出的json格式的模型数据转化成一个物模型类，方便使用
+> - 该模块是将移远云导出的json格式的模型数据转化成一个物模型类，方便使用
+> - 该类初始化完成后有三个属性, 为`properties`, `events`, `services`, 且每个属性为一个对象;
+> - 物模型具体的key值为`properties`, `events`, `services`对象的属性, 属性值为默认的数据类型值;
 
 示例:
 
@@ -24,6 +29,8 @@ print(quec_object_model.properties.GeoLocation)
 # {"GeoLocation": {"Longitude": 0.0, "Latitude": 0.0, "Altitude": 0.0, "CoordinateSystem": 0}}
 print(quec_object_model.events.sos_alert)
 # {"sos_alert": {"local_time": 0, "GeoLocation": {"Longitude": 0.0, "Latitude": 0.0, "Altitude": 0.0, "CoordinateSystem": 0}}}
+print(ali_object_model.services.test_service)
+# {"input": {"query_device_info": ""}, "output": {"local_time": 0}}
 ```
 
 参数:

@@ -206,15 +206,36 @@ class QuecObjectModel(CloudObjectModel):
                 for om_property in om_event_out_put:
                     property_id = int(om_property.get("$ref", "").split("/")[-1])
                     om_property_key = self.id_code.get(property_id)
-                    om_property_val = getattr(self.properties, om_property_key)
-                    om_property_val.update(om_property_val)
+                    om_event_val.update(getattr(self.properties, om_property_key))
             setattr(self.events, om_event_key, {om_event_key: om_event_val})
+
+    def __init_services(self, om_services):
+        for om_service in om_services:
+            om_service_key = om_service["code"]
+            om_service_output = om_service.get("outputData", [])
+            om_service_input = om_service.get("inputData", [])
+            om_service_output_val = {}
+            om_service_input_val = {}
+            self.id_code[om_service["id"]] = om_service["code"]
+            self.code_id[om_service["code"]] = om_service["id"]
+            if om_service_output:
+                for om_property in om_service_output:
+                    property_id = int(om_property.get("$ref", "").split("/")[-1])
+                    om_property_key = self.id_code.get(property_id)
+                    om_service_output_val.update(getattr(self.properties, om_property_key))
+            if om_service_input:
+                for om_property in om_service_input:
+                    property_id = int(om_property.get("$ref", "").split("/")[-1])
+                    om_property_key = self.id_code.get(property_id)
+                    om_service_input_val.update(getattr(self.properties, om_property_key))
+            setattr(self.services, om_service_key, {"output": om_service_output_val, "input": om_service_input_val})
 
     def init(self):
         with open(self.om_file, "rb") as f:
             cloud_object_model = ujson.load(f)
             self.__init_properties(cloud_object_model.get("properties", []))
             self.__init_events(cloud_object_model.get("events", []))
+            self.__init_services(cloud_object_model.get("services", []))
 
 
 class QuecThing(CloudObservable):
@@ -315,10 +336,18 @@ class QuecThing(CloudObservable):
                 struct_info = self.__object_model.struct_code_id.get(k)
         elif hasattr(self.__object_model.events, k):
             k_id = self.__object_model.code_id[k]
-            event_struct_info = hasattr(self.__object_model.events, k)
-            for i in event_struct_info:
-                if isinstance(getattr(self.__object_model.properties, i), dict):
-                    struct_info[i] = self.__object_model.struct_code_id(i)
+            event_struct_info = getattr(self.__object_model.events, k)
+            for i in event_struct_info[k].keys():
+                if isinstance(getattr(self.__object_model.properties, i).get(i), dict):
+                    struct_info[i] = self.__object_model.struct_code_id.get(i, None)
+                else:
+                    struct_info[i] = self.__object_model.code_id[i]
+        elif hasattr(self.__object_model.services, k):
+            k_id = self.__object_model.code_id[k]
+            service_struct_info = getattr(self.__object_model.services, k)
+            for i in service_struct_info["output"].keys():
+                if isinstance(getattr(self.__object_model.properties, i).get(i), dict):
+                    struct_info[i] = self.__object_model.struct_code_id.get(i, None)
                 else:
                     struct_info[i] = self.__object_model.code_id[i]
         else:
@@ -378,7 +407,19 @@ class QuecThing(CloudObservable):
                 res_data = ("raw_data", eventdata)
                 res_datas.append(res_data)
             elif errcode == 10210:
-                dl_data = [(self.__object_model.id_code[k], v.decode() if isinstance(v, bytes) else v) for k, v in eventdata.items()]
+                dl_data = []
+                for k, v in eventdata.items():
+                    event_item = ()
+                    if isinstance(v, bytes):
+                        event_item = (self.__object_model.id_code.get(k, k), v.decode())
+                    elif isinstance(v, dict):
+                        event_item = (self.__object_model.id_code.get(k, k), {self.__object_model.id_code.get(v_k, v_k): v_v for v_k, v_v in v.items()})
+                    else:
+                        event_item = (self.__object_model.id_code.get(k, k), v)
+                    if not hasattr(self.__object_model.services, self.__object_model.id_code.get(k, k)):
+                        dl_data.append(event_item)
+                    else:
+                        dl_data.append(("thing_services", {"data": event_item[1], "service": event_item[0]}))
                 res_data = ("object_model", dl_data)
                 res_datas.append(res_data)
             elif errcode == 10211:
