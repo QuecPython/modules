@@ -4,16 +4,104 @@
 
 > 该模块作用于云服务与设备直接消息交互的中间件
 
-## 功能接口说明
+## 使用说明
+
+### RemoteSubscribe
+
+> 该模块作为云服务接口与业务接口的中间件, 不单独进行使用, 需和业务模块功能与云服务模块功能结合使用
+
+#### 1. 模块导入
+
+```python
+from remote import RemoteSubscribe
+remote_sub = RemoteSubscribe()
+```
+
+#### 2. 添加业务处理模块对象
+
+```python
+
+class CloudExecutor(object):
+    pass
+
+cloud_executor = CloudExecutor()
+res = remote_sub.add_executor(cloud_executor)
+```
+
+#### 3. 注册为云服务模块监听者
+
+```python
+from aliyunIot import AliYunIot
+ali = AliYunIot(pk, ps, dk, ds, server, client_id)
+ali.addObserver(remote_sub)
+
+# 阿里云模块接收到服务端下发消息后整合之后调用该模块的execute接口将消息通知给该模块
+remote_sub.execute(ali, *args, **kwargs)
+```
+
+### RemotePublish
+
+> 该模块作为云服务接口与业务接口的中间件, 不单独进行使用, 需和云服务模块功能结合使用
+
+#### 1. 模块导入
+
+```python
+from remote import RemotePublish
+remote_pub = RemotePublish()
+```
+
+#### 2. 添加云服务模块
+
+```python
+from aliyunIot import AliYunIot
+ali = AliYunIot(pk, ps, dk, ds, server, client_id)
+res = remote_pub.add_cloud(ali)
+```
+
+#### 3. 云服务OTA升级计划查询
+
+```python
+res = remote_pub.cloud_ota_check()
+```
+
+#### 4. 云服务OTA升级确认
+
+```python
+res = remote_pub.cloud_ota_action(action, module)
+```
+
+#### 5. 设备模块版本信息上报
+
+```python
+res = remote_pub.cloud_device_report()
+```
+
+#### 6. MQTT同步通信消息应答
+
+```python
+res = remote_pub.cloud_rrpc_response(message_id, data)
+```
+
+#### 7. 物模型消息发布
+
+```python
+data = {
+    "switch": True,
+    "energy": 100,
+}
+res = remote_pub.post_data(data)
+```
+
+## API说明
 
 ### RemoteSubscribe 云端消息下发
 
-> 该模块采用监听者设计模式，该模块继承`CloudObserver`
+> 该模块采用监听者设计模式, 该模块继承`CloudObserver`
 > 
-> - 相对云端接口，该模块为监听者，接收云端下发的消息
-> - 相对业务处理模块，该模块为被监听者，当收到云端下发的消息后，通知业务模块
+> - 相对云端接口, 该模块为监听者, 接收云端下发的消息
+> - 相对业务处理模块, 该模块为被监听者, 当收到云端下发的消息后, 通知业务模块
 
-#### 模块导入
+#### 导入初始化
 
 示例:
 
@@ -24,7 +112,7 @@ remote_sub = RemoteSubscribe()
 
 #### add_executor 添加业务处理模块对象
 
-> 业务处理模块需包含一下几个方法，作为监听者接收消息函数，当不包含这些方法时，则不会将云端下发的对应功能的消息通知到业务模块。
+> 业务处理模块需包含一下几个方法, 作为监听者接收消息函数, 当不包含这些方法时, 则不会将云端下发的对应功能的消息通知到业务模块。
 > 
 > - `event_option` 透传模式数据接收
 > - `event_done` 物模型设置数据接收
@@ -37,10 +125,10 @@ remote_sub = RemoteSubscribe()
 
 ```python
 
-class cloudExecutor(object):
+class CloudExecutor(object):
     pass
 
-cloud_executor = cloudExecutor()
+cloud_executor = CloudExecutor()
 res = remote_sub.add_executor(cloud_executor)
 ```
 
@@ -64,6 +152,8 @@ res = remote_sub.add_executor(cloud_executor)
 from aliyunIot import AliYunIot
 ali = AliYunIot(pk, ps, dk, ds, server, client_id)
 ali.addObserver(remote_sub)
+
+# 阿里云模块接收到服务端下发消息后整合之后调用该模块的execute接口将消息通知给该模块
 remote_sub.execute(ali, *args, **kwargs)
 ```
 
@@ -81,11 +171,11 @@ remote_sub.execute(ali, *args, **kwargs)
 
 ### RemotePublish 云端消息发布
 
-> 该模块采用监听者设计模式，该模块继承`Observable`
+> 该模块采用监听者设计模式, 该模块继承`Observable`
 > 
-> - 相对于业务模块，该模块作为监听者，接收业务模块的消息发送信息
-> - 相对于云功能模块，该模块作为被监听者，当有数据需要进行发送时，通知云功能模块
-> - 同时该模块也作为`History`模块的被监听者，当消息发送失败时，发送失败的数据通知给`History`模块进行存储
+> - 相对于业务模块, 该模块作为监听者, 接收业务模块的消息发送信息
+> - 相对于云功能模块, 该模块作为被监听者, 当有数据需要进行发送时, 通知云功能模块
+> - 同时该模块也作为`History`模块的被监听者, 当消息发送失败时, 发送失败的数据通知给`History`模块进行存储
 
 #### 模块导入
 
@@ -96,7 +186,7 @@ from remote import RemotePublish
 remote_pub = RemotePublish()
 ```
 
-#### add_cloud 添加云功能模块对象
+#### add_cloud 添加云服务模块
 
 示例:
 
@@ -149,7 +239,7 @@ res = remote_pub.cloud_ota_action(action, module)
 |参数|类型|说明|
 |:---|---|---|
 |action|INT| 0 取消升级, 1 确认升级|
-|module|STRING|升级模块，固件名或项目名|
+|module|STRING|升级模块, 固件名或项目名|
 
 返回值:
 
@@ -198,7 +288,7 @@ res = remote_pub.cloud_rrpc_response(message_id, data)
 
 #### post_data 物模型消息发布
 
-> 当消息发送失败时，会通知已注册的监听者`History`进行消息存储
+> 当消息发送失败时, 会通知已注册的监听者`History`进行消息存储
 
 示例:
 

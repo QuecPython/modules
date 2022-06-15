@@ -7,7 +7,129 @@
 > - 物模型导入转化类
 > - MQTT协议的消息发布与订阅, OTA升级。
 
-## 功能接口说明
+## 使用说明
+
+### 1. 物模型初始化
+
+```python
+from aliyunIot import AliObjectModel
+
+object_model_file = "/usr/aliyun_object_model.json"
+ali_object_model = AliObjectModel(om_file=object_model_file)
+```
+
+### 2. 阿里云模块初始化
+
+```python
+from aliyunIot import AliYunIot
+
+pk = "ProductKey"
+ps = "ProductSecret"
+dk = "DeviceKey"
+ds = "DeviceSecret"
+server = "%s.iot-as-mqtt.cn-shanghai.aliyuncs.com" % pk
+client_id = dk
+
+ali = AliYunIot(pk, ps, dk, ds, server, client_id)
+```
+
+### 3. 注册物模型对象
+
+```python
+from aliyunIot import AliObjectModel
+
+ali_object_model = AliObjectModel()
+res = ali.set_object_model(ali_object_model)
+```
+
+### 4. 添加监听者
+
+```python
+from remote import RemoteSubscribe
+
+remote_sub = RemoteSubscribe()
+ali.addObserver(remote_sub)
+```
+
+### 5. 连接初始化
+
+```python
+res = ali.init(enforce=False)
+```
+
+### 6. 发布消息(物模型)
+
+```python
+data = {
+    "phone_num": "123456789",
+    "energy": 100,
+    "GeoLocation": {
+        "Longtitude": 100.26,
+        "Latitude": 26.86,
+        "Altitude": 0.0,
+        "CoordinateSystem": 1
+    }
+}
+res = ali.post_data(data)
+```
+
+### 7. MQTT同步通信(RRPC)消息应答
+
+> 当订阅了RRPC同步通信的topic, 收到了RRPC消息时后进行应答
+
+```python
+res = ali.rrpc_response(message_id, data)
+```
+
+### 8. 设备固件版本与项目应用版本信息上报
+
+```python
+res = ali.device_report()
+```
+
+### 9. OTA升级计划查询
+
+```python
+res = ali.ota_request()
+```
+
+### 10. 确认是否OTA升级
+
+```python
+res = ali.ota_action(action, module)
+```
+
+### 11. 设备模块版本信息上报
+
+```python
+res = ali.ota_device_inform(version, module)
+```
+
+### 12. 设备上报升级进度
+
+```python
+res = ali.ota_device_progress(step, desc, module)
+```
+
+### 13. 设备请求OTA升级包信息
+
+```python
+res = ali.ota_firmware_get(module)
+```
+
+### 14. 设备请求下载文件分片
+
+```python
+res = ali.ota_file_download(fileToken, streamId, fileId, size, offset)
+```
+
+### 15. 断开连接
+
+```python
+res = ali.close()
+```
+
+## API说明
 
 ### AliObjectModel
 
@@ -47,57 +169,62 @@ print(ali_object_model.services.query_device_info)
 > 
 > - 监听者: 可作为`remote`模块的`RemotePublish`类的监听者, 用于接收其消息的通知, 进行数据的发布.
 > - 被监听者: 可作为`remote`模块的`RemoteSubscribe`类的被监听者, 用户通知监听者服务器下发的数据信息.
+>
+> 该模块继承`common`模块中的`CloudObservable`方法, 其方法见`common`模块文档, 在此不再赘述。
 
-#### addObserver 添加监听者
+#### 导入初始化
 
 示例:
 
 ```python
-from remote import RemoteSubscribe
+from aliyunIot import AliYunIot
 
-remote_sub = RemoteSubscribe()
-
-ali.addObserver(remote_sub)
+pk = "ProductKey"
+ps = "ProductSecret"
+dk = "DeviceKey"
+ds = "DeviceSecret"
+server = "%s.iot-as-mqtt.cn-shanghai.aliyuncs.com" % pk
+client_id = dk
+burning_method = 0
+life_time = 120
+mcu_name = "QuecPython-AliyunIot"
+mcu_version = "v2.0.1"
+firmware_name = "EC600N-CNLC"
+firmware_version = "EC600NCNLCR01A01M08_PY_BETA0527"
+reconn = True
+ali = AliYunIot(
+    pk, ps, dk, ds, server, client_id, burning_method,
+    life_time, mcu_name, mcu_version, firmware_name,
+    firmware_version, reconn
+)
 ```
 
 参数:
 
 |参数|类型|说明|
 |:---|---|---|
-|observer|OBJECT|监听者类实例对象|
-
-返回值:
-
-无
-
-#### delObserver 删除监听者
-
-示例:
-
-```python
-ali.delObserver(remote_sub)
-```
-
-参数:
-
-|参数|类型|说明|
-|:---|---|---|
-|observer|OBJECT|监听者类实例对象|
-
-返回值:
-
-无
+|pk|STRING|产品标识|
+|ps|STRING|产品密钥|
+|dk|STRING|设备名称|
+|ds|STRING|device secret|
+|server|STRING|设备密钥|
+|client_id|STRING|自定义阿里云连接id, 默认设备名称|
+|burning_method|INT|0 - 一型一密, 1 - 一机一密, 默认0|
+|life_time|INT|通信之间允许的最长时间段（以秒为单位）, 默认为300, 范围（60-1200）, 默认120|
+|mcu_name|STRING|设备模块名称, 默认空字符串|
+|mcu_version|STRING|设备模块版本号, 默认空字符串|
+|firmware_name|STRING|固件名称, 默认空字符串|
+|firmware_version|STRING|固件版本号, 默认空字符串|
+|reconn|BOOL|控制是否使用内部重连的标志, 默认开启为True|
 
 #### set_object_model 注册物模型对象(`AliObjectModel`实例)
 
 示例:
 
 ```python
-from aliyunIot import AliYunIot, AliObjectModel
+from aliyunIot import AliObjectModel
 
 ali_object_model = AliObjectModel()
-
-ali = AliYunIot(pk, ps, dk, ds, server, client_id)
 res = ali.set_object_model(ali_object_model)
 ```
 

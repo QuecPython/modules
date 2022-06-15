@@ -1,8 +1,6 @@
 import uos
-import utime
 import modem
 from machine import UART
-from aLiYun import aLiYun
 
 from usr.modules.location import Location, _loc_method, GPSMatch, GPSParse
 from usr.modules.aliyunIot import AliYunIot, AliObjectModel
@@ -144,66 +142,5 @@ def test_aliyuniot():
     print("[test_aliyuniot] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
 
 
-def __ali_sub_cb(topic, data):
-    print("topic: %s, data: %s" % (topic, data))
-
-
-def __subscribe_topic(__ali, topic, qos=0):
-    subscribe_res = __ali.subscribe(topic, qos=0)
-    if subscribe_res == -1:
-        raise TypeError("AliYun subscribe topic %s falied" % topic)
-    print("[DEBUG]AliYun subscribe topic success %s." % topic)
-
-
-def __ali_subscribe_topic(__ali, __pk, __dk):
-    ica_topic_property_post = "/sys/%s/%s/thing/event/property/post" % (__pk, __dk)
-    ica_topic_property_post_reply = "/sys/%s/%s/thing/event/property/post_reply" % (__pk, __dk)
-    ica_topic_property_set = "/sys/%s/%s/thing/service/property/set" % (__pk, __dk)
-    ota_topic_device_upgrade = "/ota/device/upgrade/%s/%s" % (__pk, __dk)
-    ota_topic_firmware_get_reply = "/sys/%s/%s/thing/ota/firmware/get_reply" % (__pk, __dk)
-
-    # TODO: To Download OTA File For MQTT Association (Not Support Now.)
-    ota_topic_file_download_reply = "/sys/%s/%s/thing/file/download_reply" % (__pk, __dk)
-
-    rrpc_topic_request = "/sys/%s/%s/rrpc/request/+" % (__pk, __dk)
-
-    try:
-        __subscribe_topic(__ali, ica_topic_property_post)
-        __subscribe_topic(__ali, ica_topic_property_post_reply)
-        __subscribe_topic(__ali, ica_topic_property_set)
-        __subscribe_topic(__ali, ota_topic_device_upgrade)
-        __subscribe_topic(__ali, ota_topic_firmware_get_reply)
-        __subscribe_topic(__ali, rrpc_topic_request)
-        __subscribe_topic(__ali, ota_topic_file_download_reply)
-        return True
-    except Exception as e:
-        print("[ERROR][__ali_subscribe_topic] %s" % e)
-        return False
-
-
-def test_aliyun():
-    cloud_init_params = AliCloudConfig.__dict__
-    __ali = aLiYun(cloud_init_params["PK"], None, cloud_init_params["DK"], cloud_init_params["DS"], cloud_init_params["SERVER"])
-    __client_id = cloud_init_params["client_id"] if cloud_init_params["client_id"] else cloud_init_params["DK"]
-    setMqttres = __ali.setMqtt(__client_id, clean_session=False, keepAlive=120, reconn=True)
-    if setMqttres != -1:
-        print("[DEBUG][test_aliyun] setMqttres: %s" % setMqttres)
-        setCallbackres = __ali.setCallback(__ali_sub_cb)
-        print("[DEBUG][test_aliyun] setCallbackres: %s" % setCallbackres)
-        __ali_subscribe_topic(__ali, cloud_init_params["PK"], cloud_init_params["DK"])
-        __ali.start()
-    utime.sleep(5)
-    # __ali.disconnect()
-    __ali = aLiYun(cloud_init_params["PK"], None, cloud_init_params["DK"], cloud_init_params["DS"], cloud_init_params["SERVER"])
-    __client_id = cloud_init_params["client_id"] if cloud_init_params["client_id"] else cloud_init_params["DK"]
-    setMqttres = __ali.setMqtt(__client_id, clean_session=False, keepAlive=120, reconn=True)
-    if setMqttres != -1:
-        print("[DEBUG][test_aliyun] setMqttres: %s" % setMqttres)
-        setCallbackres = __ali.setCallback(__ali_sub_cb)
-        print("[DEBUG][test_aliyun] setCallbackres: %s" % setCallbackres)
-        __ali_subscribe_topic(__ali, cloud_init_params["PK"], cloud_init_params["DK"])
-        __ali.start()
-
 if __name__ == "__main__":
     test_aliyuniot()
-    # test_aliyun()

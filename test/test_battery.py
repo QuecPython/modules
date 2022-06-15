@@ -55,16 +55,16 @@ def test_charge():
     with open("/usr/charge_status", "w") as f:
         f.write("")
 
-    # msg = "[test_charge] battery.set_charge_callback() %s"
-    # set_cb_res = battery.set_charge_callback(charge_callback)
-    # assert set_cb_res, msg % set_cb_res
-    # print(msg % set_cb_res)
-    # res["success"] += 1
+    msg = "[test_charge] battery.set_charge_callback() %s"
+    set_cb_res = battery.set_charge_callback(charge_callback)
+    assert set_cb_res, msg % set_cb_res
+    print(msg % set_cb_res)
+    res["success"] += 1
 
     res["all"] = res["success"] + res["failed"]
     print("[test_charge] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
 
 
 if __name__ == "__main__":
-    # test_battery()
+    test_battery()
     test_charge()

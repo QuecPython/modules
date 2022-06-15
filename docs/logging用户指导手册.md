@@ -4,7 +4,48 @@
 
 > 该模块用于代码日志打印
 
-## 功能接口说明
+## 使用说明
+
+### 1. 模块初始化
+
+```python
+from logging import getLogger
+
+log = getLogger("test_log")
+```
+
+### 2. 设置debug日志开关, 默认开
+
+```python
+res = log.set_debug(True)
+```
+
+### 3. 设置日志等级, 默认`debug`
+
+```python
+res = log.set_level("debug")
+```
+
+### 4. 打印不同等级日志
+
+```python
+log.debug("debug log")
+# [2022-05-09 09:03:21] [test_log] [debug] debug log
+
+log.info("info log")
+# [2022-05-09 09:03:21] [test_log] [info] info log
+
+log.warn("warn log")
+# [2022-05-09 09:03:21] [test_log] [warn] warn log
+
+log.error("error log")
+# [2022-05-09 09:03:21] [test_log] [error] error log
+
+log.critical("critical log")
+# [2022-05-09 09:03:21] [test_log] [critical] critical log
+```
+
+## API说明
 
 ### getLogger 返回日志实例对象
 
@@ -30,7 +71,7 @@ log = getLogger("test_log")
 
 ### Logger 日志模块
 
-#### 模块导入
+#### 导入初始化
 
 示例:
 
@@ -69,7 +110,7 @@ level = log.get_debug()
 示例:
 
 ```python
-res = log.set_debug(debug=True)
+res = log.set_debug(True)
 ```
 
 参数:
@@ -107,7 +148,7 @@ level = log.get_level()
 示例:
 
 ```python
-res = log.set_level()
+res = log.set_level("debug")
 ```
 
 参数:
