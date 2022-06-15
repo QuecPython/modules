@@ -67,6 +67,8 @@ res = remote_pub.cloud_ota_check()
 #### 4. 云服务OTA升级确认
 
 ```python
+action = 1
+module = "QuecPython-quecthing"
 res = remote_pub.cloud_ota_action(action, module)
 ```
 
@@ -79,6 +81,8 @@ res = remote_pub.cloud_device_report()
 #### 6. MQTT同步通信消息应答
 
 ```python
+message_id = 10
+data = {"local_time": 1655272997000}
 res = remote_pub.cloud_rrpc_response(message_id, data)
 ```
 

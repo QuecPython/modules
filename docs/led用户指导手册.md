@@ -16,7 +16,6 @@ GPIOn = Pin.GPIO1
 direction = Pin.OUT
 pullMode = Pin.PULL_DISABLE
 level = 0
-
 led = LED(GPIOn, direction=direction, pullMode=pullMode, level=level)
 ```
 
@@ -38,7 +37,7 @@ res = led.off()
 on_period = 1000
 off_period = 200
 count = 10
-res = led.start_flicker()
+res = led.start_flicker(on_period, off_period, count)
 ```
 
 ### 5. 停止LED闪烁
@@ -116,7 +115,7 @@ res = led.off()
 on_period = 1000
 off_period = 200
 count = 10
-res = led.start_flicker()
+res = led.start_flicker(on_period, off_period, count)
 ```
 
 参数:

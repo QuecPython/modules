@@ -78,6 +78,8 @@ res = ali.post_data(data)
 > 当订阅了RRPC同步通信的topic, 收到了RRPC消息时后进行应答
 
 ```python
+message_id = 10
+data = {"local_time": 1655273004000}
 res = ali.rrpc_response(message_id, data)
 ```
 
@@ -96,30 +98,43 @@ res = ali.ota_request()
 ### 10. 确认是否OTA升级
 
 ```python
+action = 1
+module = "QuecPython-AliyunIot"
 res = ali.ota_action(action, module)
 ```
 
 ### 11. 设备模块版本信息上报
 
 ```python
+version = "v2.1.0"
+module = "QuecPython-AliyunIot"
 res = ali.ota_device_inform(version, module)
 ```
 
 ### 12. 设备上报升级进度
 
 ```python
+step = 10
+desc = "updating"
+module = "QuecPython-AliyunIot"
 res = ali.ota_device_progress(step, desc, module)
 ```
 
 ### 13. 设备请求OTA升级包信息
 
 ```python
+module = "QuecPython-AliyunIot"
 res = ali.ota_firmware_get(module)
 ```
 
 ### 14. 设备请求下载文件分片
 
 ```python
+fileToken = "xxxx"
+streamId = "xxxx"
+fileId = "xxxx"
+size = 512
+offset = 2
 res = ali.ota_file_download(fileToken, streamId, fileId, size, offset)
 ```
 

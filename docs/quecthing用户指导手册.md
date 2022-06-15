@@ -85,6 +85,8 @@ res = quec.ota_request()
 ### 9. 确认是否OTA升级
 
 ```python
+action = 1
+module = "QuecPython-quecthing"
 res = quec.ota_action(action, module)
 ```
 

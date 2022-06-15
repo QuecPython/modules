@@ -30,7 +30,8 @@ res = battery.set_charge_callback(charge_callback)
 ### 3. 设置当前设备环境温度
 
 ```python
-res = battery.set_temp(30)
+temp = 30
+res = battery.set_temp(temp)
 ```
 
 ### 4. 查询电池电压

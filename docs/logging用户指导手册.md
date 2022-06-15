@@ -17,13 +17,15 @@ log = getLogger("test_log")
 ### 2. 设置debug日志开关, 默认开
 
 ```python
-res = log.set_debug(True)
+debug = True
+res = log.set_debug(debug)
 ```
 
 ### 3. 设置日志等级, 默认`debug`
 
 ```python
-res = log.set_level("debug")
+level = "debug"
+res = log.set_level(level)
 ```
 
 ### 4. 打印不同等级日志

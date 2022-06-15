@@ -211,7 +211,6 @@ wifi = WiFiLocator(wifi_cfg)
 #### 2. 定位信息读取
 
 ```python
-
 res = wifi.read()
 print(res)
 # (0, (117.1156539916992, 31.82171249389649, 60), ['34:CE:00:09:E5:A8', '60:38:E0:C2:84:D9', '00:03:7F:12:A5:A5', 'EC:B9:70:F1:8F:B5', '24:4B:FE:0B:BE:70'])
@@ -659,7 +658,6 @@ print(gps_data)
 示例:
 
 ```python
-
 coordinates = gps.read_coordinates(gps_data)
 print(coordinates)
 # (117.1154593833333, 31.82221683333333, 98.483)
@@ -682,7 +680,6 @@ print(coordinates)
 示例:
 
 ```python
-
 onoff = 1
 res = gps.power_switch(onoff)
 ```
@@ -704,7 +701,6 @@ res = gps.power_switch(onoff)
 示例:
 
 ```python
-
 onoff = 1
 res = gps.backup(onoff)
 ```
@@ -726,7 +722,6 @@ res = gps.backup(onoff)
 示例:
 
 ```python
-
 onoff = 1
 res = gps.standby(onoff)
 ```
@@ -776,7 +771,6 @@ cell = CellLocator(cell_cfg)
 示例:
 
 ```python
-
 res = cell.read()
 print(res)
 # (0, (117.1154556274414, 31.82186508178711, 550), {'near_cell': ['232301364'], 'server_cell': ([], [], [(0, 232301364, 1120, 17, 377, 26909, 1850, -72, -6)])})
@@ -821,7 +815,6 @@ wifi = WiFiLocator(wifi_cfg)
 示例:
 
 ```python
-
 res = wifi.read()
 print(res)
 # (0, (117.1156539916992, 31.82171249389649, 60), ['34:CE:00:09:E5:A8', '60:38:E0:C2:84:D9', '00:03:7F:12:A5:A5', 'EC:B9:70:F1:8F:B5', '24:4B:FE:0B:BE:70'])
