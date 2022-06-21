@@ -653,7 +653,7 @@ class QuecOTA(object):
         self.__download_size = 0
 
     def __write_ota_file(self, data):
-        with open(self.__ota_file, "wb+") as fp:
+        with open(self.__ota_file, "ab+") as fp:
             fp.write(data)
             self.__file_hash.update(data)
 
