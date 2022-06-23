@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import uos
+import usys
 import fota
 import ujson
 import utime
@@ -325,7 +326,7 @@ class AliYunIot(CloudObservable):
             self.__subscribe_topic(self.ota_topic_file_download_reply)
             return True
         except Exception as e:
-            log.error(e)
+            usys.print_exception(e)
             return False
 
     def __ali_sub_cb(self, topic, data):
@@ -453,11 +454,12 @@ class AliYunIot(CloudObservable):
                 event_value = {}
                 if v:
                     for v_k, v_v in v.items():
-                        if v_k in self.__object_model.events.k:
-                            if isinstance(v_v, type(self.__object_model.events.k[v_k])):
+                        event_item = getattr(self.__object_model.events, k)
+                        if v_k in event_item.keys():
+                            if isinstance(v_v, type(event_item[v_k])):
                                 event_value.update({v_k: v_v})
                             else:
-                                log.error("Type of %s's value is %s, not %s. So pass." % (type(self.__object_model.events.k[v_k]), v_k, type(v_v)))
+                                log.error("Type of %s's value is %s, not %s. So pass." % (type(event_item[v_k]), v_k, type(v_v)))
                         else:
                             log.error("Key %s is not in event %s output. So pass." % (v_k, k))
                 event_params[k] = {
@@ -594,6 +596,7 @@ class AliYunIot(CloudObservable):
         try:
             self.__ali.disconnect()
         except Exception as e:
+            usys.print_exception(e)
             log.error("Ali disconnect falied. %s" % e)
         return True
 
@@ -606,7 +609,8 @@ class AliYunIot(CloudObservable):
         """
         try:
             return True if self.__ali.getAliyunSta() == 0 else False
-        except:
+        except Exception as e:
+            usys.print_exception(e)
             return False
 
     def post_data(self, data):
@@ -645,7 +649,8 @@ class AliYunIot(CloudObservable):
 
             pub_res = [self.__get_post_res(msg_id) for msg_id in publish_data["msg_ids"]]
             return True if False not in pub_res else False
-        except Exception:
+        except Exception as e:
+            usys.print_exception(e)
             log.error("AliYun publish failed. data: %s" % str(data))
 
         return False
@@ -1004,8 +1009,7 @@ class AliOTA(object):
             ota_file.seek(10)
             unzipFp = uzlib.DecompIO(ota_file, self.__unzip_size(tar_size))
             log.debug("[OTA Upgrade] Unzip file success.")
-            # try:
-            if True:
+            try:
                 while True:
                     data = unzipFp.read(0x200)
                     if not data:
@@ -1029,20 +1033,19 @@ class AliOTA(object):
                             read_size = 0x200
                             last_size = size
                             while last_size > 0:
-                                log.debug("read_size: %s, last_size: %s" % (read_size, last_size))
-                                read_size = read_size if read_size <= last_size else last_size
                                 data = unzipFp.read(read_size)
-                                fp.write(data)
-                                last_size -= read_size
+                                write_size = read_size if read_size <= last_size else last_size
+                                fp.write(data[:write_size])
+                                last_size -= write_size
                             log.debug("file_name: %s, size: %s" % (file_name, size))
                             file_list.append({"file_name": file_name, "size": size})
                 log.debug("Remove %s" % (self.__updater_dir + self.__tar_file))
                 uos.remove(self.__updater_dir + self.__tar_file)
                 app_fota_download.delete_update_file(self.__tar_file)
-            # except Exception as e:
-            #     err_msg = "Unpack Error: %s" % e
-            #     log.error(err_msg)
-            #     self.__aliyuniot.ota_device_progress(-4, err_msg, module=self.__module)
+            except Exception as e:
+                usys.print_exception(e)
+                err_msg = "Unpack Error: %s" % e
+                self.__aliyuniot.ota_device_progress(-4, err_msg, module=self.__module)
 
         return file_list
 

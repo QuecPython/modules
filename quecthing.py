@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import uos
+import usys
 import uzlib
 import ql_fs
 import ujson
@@ -732,10 +733,10 @@ class QuecOTA(object):
                             read_size = 0x200
                             last_size = size
                             while last_size > 0:
-                                read_size = read_size if read_size <= last_size else last_size
                                 data = unzipFp.read(read_size)
-                                fp.write(data)
-                                last_size -= read_size
+                                write_size = read_size if read_size <= last_size else last_size
+                                fp.write(data[:write_size])
+                                last_size -= write_size
                             file_list.append({"file_name": "/usr/" + file_name, "size": size})
 
                 for file_name in file_list:
@@ -746,7 +747,7 @@ class QuecOTA(object):
 
                 app_fota_download.set_update_flag()
             except Exception as e:
-                log.error("Unpack Error: %s" % e)
+                usys.print_exception(e)
                 return False
 
         return True
