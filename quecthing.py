@@ -705,7 +705,7 @@ class QuecOTA(object):
     def __upgrade(self):
         with open(self.__ota_file, "rb+") as ota_file:
             ota_file.seek(10)
-            unzipFp = uzlib.DecompIO(ota_file, -15)
+            unzipFp = uzlib.DecompIO(ota_file, -15, 1)
             log.debug("[OTA Upgrade] Unzip file success.")
             ql_fs.mkdirs(self.__updater_dir)
             file_list = []

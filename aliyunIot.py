@@ -1007,7 +1007,7 @@ class AliOTA(object):
         tar_size = uos.stat(self.__updater_dir + self.__tar_file)[-4]
         with open(self.__updater_dir + self.__tar_file, "rb+") as ota_file:
             ota_file.seek(10)
-            unzipFp = uzlib.DecompIO(ota_file, self.__unzip_size(tar_size))
+            unzipFp = uzlib.DecompIO(ota_file, self.__unzip_size(tar_size), 1)
             log.debug("[OTA Upgrade] Unzip file success.")
             try:
                 while True:
