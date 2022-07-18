@@ -30,6 +30,8 @@ class Logger:
 
     def __log(self, name, level, *message):
         if self.__debug is False:
+            if self.__level == "debug" and level == "debug":
+                return
             if self.__level_code.get(level) < self.__level_code.get(self.__level):
                 return
 
