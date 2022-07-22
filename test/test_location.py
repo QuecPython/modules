@@ -56,7 +56,7 @@ _wifi_cfg = {
     "token": "xGP77d2z0i91s67n"
 }
 
-gps_mode = 0x2
+gps_mode = 0x1
 locator_init_params = {
     "gps_cfg": _gps_cfg,
     "cell_cfg": _cell_cfg,
@@ -114,6 +114,8 @@ def test_gps():
         # assert gps_data[0] == 0, msg % ("FAILED", gps_data)
         print(msg % ("SUCCESS", gps_data))
         res["success"] += 1
+        if gps_data[0] == 0:
+            break
 
     if gps_data[0] == 0 and gps_data[1]:
         msg = "[test_gps] %s: GPS.read_coordinates() gps_coordinates: %s."

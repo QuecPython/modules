@@ -188,7 +188,7 @@ class GPSParse(object):
             loc_status_re = ure.search(r"\$G[NP]RMC,\d*\.*\d*,[AV],", rmc_data)
             if loc_status_re:
                 loc_status = loc_status_re.group(0).split(",")[-2]
-            return True if loc_status == "A" else False
+                return True if loc_status == "A" else False
         return False
 
 
