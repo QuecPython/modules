@@ -94,7 +94,14 @@ class GPSMatch(object):
     """This class is match gps NEMA 0183"""
 
     def GxRMC(self, gps_data):
-        """Match Recommended Minimum Specific GPS/TRANSIT Data（RMC）"""
+        """Match Recommended Minimum Specific GPS/TRANSIT Data（RMC）
+
+        Args:
+            gps_data(str): GPS NMEA string.
+
+        Returns:
+            str: RMC NMEA string.
+        """
         if gps_data:
             rmc_re = ure.search(
                 r"\$G[NP]RMC,\d*\.*\d*,[AV],\d*\.*\d*,[NS],\d*\.*\d*,[EW],\d*\.*\d*,\d*\.*\d*,\d*,\d*\.*\d*,[EW]*,[ADEN]*,[SCUV]*\**(\d|\w)*",
@@ -104,7 +111,14 @@ class GPSMatch(object):
         return ""
 
     def GxGGA(self, gps_data):
-        """Match Global Positioning System Fix Data（GGA）"""
+        """Match Global Positioning System Fix Data（GGA）
+
+        Args:
+            gps_data(str): GPS NMEA string.
+
+        Returns:
+            str: GGA NMEA string.
+        """
         if gps_data:
             gga_re = ure.search(
                 r"\$G[BLPN]GGA,\d*\.*\d*,\d*\.*\d*,[NS],\d*\.*\d*,[EW],[0126],\d*,\d*\.*\d*,-*\d*\.*\d*,M,-*\d*\.*\d*,M,\d*,\**(\d|\w)*",
@@ -114,7 +128,14 @@ class GPSMatch(object):
         return ""
 
     def GxVTG(self, gps_data):
-        """Match Track Made Good and Ground Speed（VTG）"""
+        """Match Track Made Good and Ground Speed（VTG）
+
+        Args:
+            gps_data(str): GPS NMEA string.
+
+        Returns:
+            str: VTG NMEA string.
+        """
         if gps_data:
             vtg_re = ure.search(r"\$G[NP]VTG,\d*\.*\d*,T,\d*\.*\d*,M,\d*\.*\d*,N,\d*\.*\d*,K,[ADEN]*\*(\d|\w)*", gps_data)
             if vtg_re:
@@ -122,12 +143,47 @@ class GPSMatch(object):
         return ""
 
     def GxGSV(self, gps_data):
-        """Mactch GPS Satellites in View（GSV）"""
+        """Mactch GPS Satellites in View（GSV）
+
+        Args:
+            gps_data(str): GPS NMEA string.
+
+        Returns:
+            str: GSV NMEA string.
+        """
         if gps_data:
             gsv_re = ure.search(r"\$G[NP]GSV,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*\**(\d|\w)*", gps_data)
             if gsv_re:
                 return gsv_re.group(0)
         return ""
+
+    def GxGLL(self, gps_data):
+        """Geographic Position
+
+        Args:
+            gps_data(str): GPS NMEA string.
+
+        Returns:
+            str: GLL NMEA string.
+        """
+        if gps_data:
+            gll_re = ure.search(r"\$G[NP]GLL,\d*\.*\d*,[NS]*,\d*\.*\d*,[EW]*,\d*\.*\d*,[AV]*,[ADEN]*\**(\d|\w)*", gps_data)
+            if gll_re:
+                return gll_re.group(0)
+
+    def GxGSA(self, gps_data):
+        """GNSS DOP and Active Satellites
+
+        Args:
+            gps_data(str): GPS NMEA string.
+
+        Returns:
+            str: GSA NMEA string.
+        """
+        if gps_data:
+            gsa_re = ure.search(r"\$G[NP]GSA,[MA]*,[123]*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*\.*\d*,\d*\.*\d*,\d*\.*\d*,(\d|\w)*\**(\d|\w)*", gps_data)
+            if gsa_re:
+                return gsa_re.group(0)
 
 
 class GPSParse(object):
@@ -191,6 +247,27 @@ class GPSParse(object):
                 return True if loc_status == "A" else False
         return False
 
+    def __nmea_parse(self, nmea):
+        return tuple(nmea[1:].split("*")[0].split(",")) if nmea else ()
+
+    def GxRMC(self, rmc_data):
+        return self.__nmea_parse(rmc_data)
+
+    def GxGGA(self, gga_data):
+        return self.__nmea_parse(gga_data)
+
+    def GxGSV(self, gsv_data):
+        return self.__nmea_parse(gsv_data)
+
+    def GxGSA(self, gsa_data):
+        return self.__nmea_parse(gsa_data)
+
+    def GxVTG(self, vtg_data):
+        return self.__nmea_parse(vtg_data)
+
+    def GxGLL(self, gll_data):
+        return self.__nmea_parse(gll_data)
+
 
 class GPS(Singleton):
     """This class if for reading gps data.
@@ -200,6 +277,14 @@ class GPS(Singleton):
     Sleep power consumption:
         power off < backup < standby
     """
+
+    __RMC = 0
+    __GGA = 1
+    __GSV = 2
+    __GSA = 3
+    __VTG = 4
+    __GLL = 5
+    __NMEA = 0b010111
 
     def __init__(self, gps_cfg, gps_mode):
         """ Init gps params
@@ -302,12 +387,19 @@ class GPS(Singleton):
         """GPS read old data clean timer callback
         When GPS read over time, clean old gps data, wait to read new gps data.
         """
-        if "" in (self.__rmc_data, self.__gga_data, self.__vtg_data, self.__gsv_data):
-            self.__set_gps_data("")
-            self.__rmc_data = ""
-            self.__gga_data = ""
-            self.__vtg_data = ""
-            self.__gsv_data = ""
+        clean = False
+        if "" in (self.__rmc_data, self.__gga_data, self.__gsv_data):
+            clean = True
+        else:
+            if self.__nmea_statement_exist(self.__GSA) and not self.__gsa_data:
+                clean = True
+            elif self.__nmea_statement_exist(self.__VTG) and not self.__vtg_data:
+                clean = True
+            elif self.__nmea_statement_exist(self.__GLL) and not self.__gll_data:
+                clean = True
+
+        if clean:
+            self.__gps_nmea_data_clean()
 
     def __external_init(self):
         """External GPS init"""
@@ -358,6 +450,46 @@ class GPS(Singleton):
         """Internal GPS close"""
         return True if self.__internal_obj.gnssEnable(0) == 0 else False
 
+    def __nmea_statement_exist(self, nmea_item):
+        return (self.__NMEA & (0b1 << nmea_item)) >> nmea_item
+
+    def __gps_nmea_data_clean(self):
+        self.__set_gps_data("")
+        self.__rmc_data = ""
+        self.__gga_data = ""
+        self.__gsv_data = ""
+        self.__gsa_data = ""
+        self.__vtg_data = ""
+        self.__gll_data = ""
+
+    def __check_gps_valid(self, gps_data):
+        self.__reverse_gps_data(gps_data)
+
+        if not self.__rmc_data:
+            self.__rmc_data = self.__gps_match.GxRMC(self.__get_gps_data())
+        if self.__rmc_data and self.__gps_parse.GxRMC_loc_status(self.__rmc_data):
+            if not self.__gga_data:
+                self.__gga_data = self.__gps_match.GxGGA(self.__get_gps_data())
+            if not self.__gsv_data:
+                self.__gsv_data = self.__gps_match.GxGSV(self.__get_gps_data())
+            if self.__nmea_statement_exist(self.__GSA) and not self.__gsa_data:
+                self.__gsa_data = self.__gps_match.GxGSA(self.__get_gps_data())
+            if self.__nmea_statement_exist(self.__VTG) and not self.__vtg_data:
+                self.__vtg_data = self.__gps_match.GxVTG(self.__get_gps_data())
+            if self.__nmea_statement_exist(self.__GLL) and not self.__gll_data:
+                self.__gll_data = self.__gps_match.GxGLL(self.__get_gps_data())
+
+            if self.__rmc_data and self.__gga_data and self.__gsv_data:
+                if self.__nmea_statement_exist(self.__GSA) and not self.__gsa_data:
+                    return False
+                if self.__nmea_statement_exist(self.__VTG) and not self.__vtg_data:
+                    return False
+                if self.__nmea_statement_exist(self.__GLL) and not self.__gll_data:
+                    return False
+                return True
+
+        return False
+
     @option_lock(_gps_read_lock)
     def __external_read(self):
         """Read external GPS data
@@ -394,11 +526,7 @@ class GPS(Singleton):
             self.__gps_timer.stop()
         self.__break = 0
 
-        self.__set_gps_data("")
-        self.__rmc_data = ""
-        self.__gga_data = ""
-        self.__vtg_data = ""
-        self.__gsv_data = ""
+        self.__gps_nmea_data_clean()
         self.__gps_data_check_timer.start(2000, 1, self.__gps_data_check_callback)
         cycle = 0
         while self.__break == 0:
@@ -409,19 +537,9 @@ class GPS(Singleton):
                 to_read = self.__external_obj.any()
                 log.debug("[second] to_read: %s" % to_read)
                 if to_read > 0:
-                    self.__reverse_gps_data(self.__external_obj.read(to_read).decode())
+                    if self.__check_gps_valid(self.__external_obj.read(to_read).decode()):
+                        self.__break = 1
 
-                    if not self.__rmc_data:
-                        self.__rmc_data = self.__gps_match.GxRMC(self.__get_gps_data())
-                    if self.__rmc_data and self.__gps_parse.GxRMC_loc_status(self.__rmc_data):
-                        if not self.__gga_data:
-                            self.__gga_data = self.__gps_match.GxGGA(self.__get_gps_data())
-                        if not self.__vtg_data:
-                            self.__vtg_data = self.__gps_match.GxVTG(self.__get_gps_data())
-                        if not self.__gsv_data:
-                            self.__gsv_data = self.__gps_match.GxGSV(self.__get_gps_data())
-                        if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
-                            self.__break = 1
             self.__gps_timer.stop()
             cycle += 1
             if cycle >= self.__retry:
@@ -469,30 +587,15 @@ class GPS(Singleton):
                 self.__break = 1
         self.__break = 0
 
-        self.__set_gps_data("")
-        self.__rmc_data = ""
-        self.__gga_data = ""
-        self.__vtg_data = ""
-        self.__gsv_data = ""
+        self.__gps_nmea_data_clean()
         self.__gps_data_check_timer.start(2000, 1, self.__gps_data_check_callback)
         cycle = 0
         while self.__break == 0:
             gnss_data = quecgnss.read(1024)
             if gnss_data and gnss_data[1]:
                 this_gps_data = gnss_data[1].decode() if len(gnss_data) > 1 and gnss_data[1] else ""
-                self.__reverse_gps_data(this_gps_data)
-
-                if not self.__rmc_data:
-                    self.__rmc_data = self.__gps_match.GxRMC(self.__get_gps_data())
-                if self.__rmc_data and self.__gps_parse.GxRMC_loc_status(self.__rmc_data):
-                    if not self.__gga_data:
-                        self.__gga_data = self.__gps_match.GxGGA(self.__get_gps_data())
-                    if not self.__vtg_data:
-                        self.__vtg_data = self.__gps_match.GxVTG(self.__get_gps_data())
-                    if not self.__gsv_data:
-                        self.__gsv_data = self.__gps_match.GxGSV(self.__get_gps_data())
-                    if self.__rmc_data and self.__gga_data and self.__vtg_data and self.__gsv_data:
-                        self.__break = 1
+                if self.__check_gps_valid(this_gps_data):
+                    self.__break = 1
             cycle += 1
             if cycle >= self.__retry:
                 if self.__break != 1:
@@ -596,6 +699,28 @@ class GPS(Singleton):
             return self.__gps_power_control(self.__gps_cfg["StandbyPin"], onoff, "standby")
         else:
             return False
+
+    def set_nmea_statement(self, nmea_statement):
+        """Set NMEA statement to check gps info valid
+
+        RMC, GGA, GSV must be required.
+
+        Args:
+            nmea_statement(int):
+                RMC - 0b1 << 0 (bit0), 0 - off, 1 - on
+                GGA - 0b1 << 1 (bit1), 0 - off, 1 - on
+                GSV - 0b1 << 2 (bit2), 0 - off, 1 - on
+                GSA - 0b1 << 3 (bit3), 0 - off, 1 - on
+                VTG - 0b1 << 4 (bit4), 0 - off, 1 - on
+                GLL - 0b1 << 5 (bit5), 0 - off, 1 - on
+
+        Returns:
+            bool: True - success, False - falied.
+        """
+        if nmea_statement >= 0b111:
+            self.__NMEA = nmea_statement
+            return True
+        return False
 
 
 class CellLocator(object):
@@ -734,6 +859,8 @@ class Location(Singleton):
             if self.gps is None:
                 if self.__locator_init_params.get("gps_cfg"):
                     self.gps = GPS(self.__locator_init_params["gps_cfg"], self.__gps_mode)
+                    if self.__locator_init_params["gps_cfg"].get("nmea_cfg") is not None:
+                        self.gps.set_nmea_statement(self.__locator_init_params["gps_cfg"].get("nmea_cfg"))
                 else:
                     raise ValueError("Invalid gps init parameters.")
         else:
@@ -757,7 +884,7 @@ class Location(Singleton):
         else:
             self.wifiLoc = None
 
-    def __read_gps(self):
+    def __read_gps(self, retry):
         """Read loction data from gps module
 
         Return:
@@ -778,7 +905,7 @@ class Location(Singleton):
             $GNGLL,3149.330773,N,11706.946971,E,073144.000,A,D*4E
         """
         if self.gps:
-            return self.gps.read()[1]
+            return self.gps.read(retry)[1]
         return ""
 
     def __read_cell(self):
@@ -803,7 +930,7 @@ class Location(Singleton):
             return (wifi_loc_data[1], wifi_loc_data[2])
         return ()
 
-    def read(self, loc_method):
+    def read(self, loc_method, retry=30):
         """Read location data by loc_method
         1. If loc_method include gps then get gps data;
         2. If loc_method inculde cell then get cell data;
@@ -830,7 +957,7 @@ class Location(Singleton):
         self.__locater_init(loc_method)
 
         if loc_method & _loc_method.gps:
-            loc_data[_loc_method.gps] = self.__read_gps()
+            loc_data[_loc_method.gps] = self.__read_gps(retry)
 
         if loc_method & _loc_method.cell:
             loc_data[_loc_method.cell] = self.__read_cell()
