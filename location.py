@@ -602,9 +602,7 @@ class GPS(Singleton):
             $BDGSV,5,5,18,29,02,075,,20,01,035,,1*72
             $GNGLL,3149.330773,N,11706.946971,E,073144.000,A,D*4E
         """
-        # log.debug("__internal_open start.")
-        # self.__internal_open()
-        # log.debug("__internal_open end.")
+        self.__internal_open()
 
         while self.__break == 0:
             gnss_data = quecgnss.read(1024)
@@ -631,6 +629,7 @@ class GPS(Singleton):
         self.__break = 0
 
         self.__gps_data_check_callback(None)
+        self.__internal_close()
         return self.__get_gps_data()
 
     def read(self, retry=30):
