@@ -286,16 +286,37 @@ class GPS(Singleton):
     __GLL = 5
     __NMEA = 0b010111
 
-    def __init__(self, gps_cfg, gps_mode):
-        """ Init gps params
+    def __init__(self, UARTn, buadrate, databits, parity, stopbits, flowctl, PowerPin, StandbyPin, BackupPin, gps_mode):
+        """Init GPS module
 
-        Parameter:
-            gps_cfg: this is uart init params for external gps
-            gps_mode: `internal` or `external`
+        [description]
 
+        Args:
+            UARTn(int): UART No.
+            buadrate(int): baud rate
+            databits(int): data bits (5 ~ 8)
+            parity(int): parity (0 – NONE，1 – EVEN，2 - ODD)
+            stopbits(int): stop bit
+            flowctl(int): hardware control flow (0 – FC_NONE， 1 – FC_HW)
+            PowerPin(int): Power GIPO Pin
+            StandbyPin(int): Standby GPIO Pin
+            BackupPin(int): Back GPIO Pin
+            gps_mode(int): GPS mode
+                0 - None
+                1 - internal GPS
+                2 - external GPS
         """
-        self.__gps_cfg = gps_cfg
+        self.__UARTn = UARTn
+        self.__buadrate = buadrate
+        self.__databits = databits
+        self.__parity = parity
+        self.__stopbits = stopbits
+        self.__flowctl = flowctl
+        self.__PowerPin = PowerPin
+        self.__StandbyPin = StandbyPin
+        self.__BackupPin = BackupPin
         self.__gps_mode = gps_mode
+
         self.__external_obj = None
         self.__internal_obj = quecgnss
         self.__gps_match = GPSMatch()
@@ -409,8 +430,12 @@ class GPS(Singleton):
         """External GPS start, UART init"""
         self.power_switch(1)
         self.__external_obj = UART(
-            self.__gps_cfg["UARTn"], self.__gps_cfg["buadrate"], self.__gps_cfg["databits"],
-            self.__gps_cfg["parity"], self.__gps_cfg["stopbits"], self.__gps_cfg["flowctl"]
+            self.__UARTn,
+            self.__buadrate,
+            self.__databits,
+            self.__parity,
+            self.__stopbits,
+            self.__flowctl
         )
         self.__external_obj.set_callback(self.__external_retrieve_cb)
 
@@ -667,8 +692,8 @@ class GPS(Singleton):
             onoff: 0 -- off, 1 -- on
         """
         if self.__gps_mode & _gps_mode.external:
-            if self.__gps_cfg.get("PowerPin") is not None:
-                return self.__gps_power_control(self.__gps_cfg["PowerPin"], onoff, "power_switch")
+            if self.__PowerPin is not None:
+                return self.__gps_power_control(self.__PowerPin, onoff, "power_switch")
             else:
                 return False
         elif self.__gps_mode & _gps_mode.internal:
@@ -684,8 +709,8 @@ class GPS(Singleton):
         Params:
             onoff: 0 -- off, 1 -- on
         """
-        if self.__gps_cfg.get("BackupPin") is not None:
-            return self.__gps_power_control(self.__gps_cfg.get("BackupPin"), onoff, "backup")
+        if self.__BackupPin is not None:
+            return self.__gps_power_control(self.__BackupPin, onoff, "backup")
         else:
             return False
 
@@ -695,8 +720,8 @@ class GPS(Singleton):
         Params:
             onoff: 0 -- off, 1 -- on
         """
-        if self.__gps_cfg.get("StandbyPin") is not None:
-            return self.__gps_power_control(self.__gps_cfg["StandbyPin"], onoff, "standby")
+        if self.__StandbyPin is not None:
+            return self.__gps_power_control(self.__StandbyPin, onoff, "standby")
         else:
             return False
 
@@ -726,8 +751,12 @@ class GPS(Singleton):
 class CellLocator(object):
     """This class is for reading cell location data"""
 
-    def __init__(self, cell_cfg):
-        self.__cell_cfg = cell_cfg
+    def __init__(self, serverAddr, port, token, timeout, profileIdx):
+        self.__serverAddr = serverAddr
+        self.__port = port
+        self.__token = token
+        self.__timeout = timeout
+        self.__profileIdx = profileIdx
 
     def read(self):
         read_loc_res = self.__read_loc()
@@ -752,11 +781,11 @@ class CellLocator(object):
         """
         res = -1
         loc_data = cellLocator.getLocation(
-            self.__cell_cfg["serverAddr"],
-            self.__cell_cfg["port"],
-            self.__cell_cfg["token"],
-            self.__cell_cfg["timeout"],
-            self.__cell_cfg["profileIdx"]
+            self.__serverAddr,
+            self.__port,
+            self.__token,
+            self.__timeout,
+            self.__profileIdx
         )
         if isinstance(loc_data, tuple) and len(loc_data) == 3:
             res = 0
@@ -786,8 +815,8 @@ class CellLocator(object):
 class WiFiLocator(object):
     """This class is for reading wifi location data"""
 
-    def __init__(self, wifi_cfg):
-        self.__wifilocator_obj = wifilocator(wifi_cfg["token"])
+    def __init__(self, token):
+        self.__wifilocator_obj = wifilocator(token)
 
     def read(self):
         read_loc_res = self.__read_loc()
@@ -837,48 +866,61 @@ class Location(Singleton):
     cellLoc = None
     wifiLoc = None
 
-    def __init__(self, gps_mode, locator_init_params):
-        self.__gps_mode = gps_mode
-        self.__locator_init_params = locator_init_params
+    def __init__(self, loc_method, locator_init_params):
+        """Init Location module
 
-    def __locater_init(self, loc_method):
-        """Init gps, cell, wifi by loc_method
+        1. If loc_method include gps then init gps module;
+        2. If loc_method inculde cell then init cell module;
+        3. If loc_method Include wifi then init wifi module;
 
-        Parameter:
-            loc_method:
-                - 1: gps
-                - 2: cell
-                - 3: cell & gps
-                - 4: wifi
-                - 5: wifi & gps
-                - 6: wifi & cell
-                - 7: wifi & cell & gps
+        Args:
+            loc_method(int):
+                1 - gps
+                2 - cell
+                3 - cell & gps
+                4 - wifi
+                5 - wifi & gps
+                6 - wifi & cell
+                7 - wifi & cell & gps
+            locator_init_params(dict):
+                gps_cfg(dict):GPS module init args
+                cell_cfg(dict):CELL module init args
+                wifi_cfg(dict):WIFI module init args
         """
+        self.__loc_method = loc_method
+        self.__locator_init_params = locator_init_params
+        self.__locater_init()
 
-        if loc_method & _loc_method.gps:
+    def __locater_init(self):
+        """Init gps, cell, wifi by loc_method"""
+
+        if self.__loc_method & _loc_method.gps:
             if self.gps is None:
-                if self.__locator_init_params.get("gps_cfg"):
-                    self.gps = GPS(self.__locator_init_params["gps_cfg"], self.__gps_mode)
-                    if self.__locator_init_params["gps_cfg"].get("nmea_cfg") is not None:
-                        self.gps.set_nmea_statement(self.__locator_init_params["gps_cfg"].get("nmea_cfg"))
+                _gps_cfg = self.__locator_init_params.get("gps_cfg", {})
+                if _gps_cfg:
+                    self.gps = GPS(**_gps_cfg)
+                    if _gps_cfg.get("nmea_cfg") is not None:
+                        self.gps.set_nmea_statement(_gps_cfg.get("nmea_cfg"))
                 else:
                     raise ValueError("Invalid gps init parameters.")
         else:
             self.gps = None
 
-        if loc_method & _loc_method.cell:
+        if self.__loc_method & _loc_method.cell:
             if self.cellLoc is None:
-                if self.__locator_init_params.get("cell_cfg"):
-                    self.cellLoc = CellLocator(self.__locator_init_params["cell_cfg"])
+                _cell_cfg = self.__locator_init_params.get("cell_cfg")
+                if _cell_cfg:
+                    self.cellLoc = CellLocator(**_cell_cfg)
                 else:
                     raise ValueError("Invalid cell-locator init parameters.")
         else:
             self.cellLoc = None
 
-        if loc_method & _loc_method.wifi:
+        if self.__loc_method & _loc_method.wifi:
             if self.wifiLoc is None:
-                if self.__locator_init_params.get("wifi_cfg"):
-                    self.wifiLoc = WiFiLocator(self.__locator_init_params["wifi_cfg"])
+                _wifi_cfg = self.__locator_init_params.get("wifi_cfg")
+                if _wifi_cfg:
+                    self.wifiLoc = WiFiLocator(**_wifi_cfg)
                 else:
                     raise ValueError("Invalid wifi-locator init parameters.")
         else:
@@ -930,39 +972,34 @@ class Location(Singleton):
             return (wifi_loc_data[1], wifi_loc_data[2])
         return ()
 
-    def read(self, loc_method, retry=30):
-        """Read location data by loc_method
-        1. If loc_method include gps then get gps data;
-        2. If loc_method inculde cell then get cell data;
-        3. If loc_method Include wifi then get wifi data;
+    def read(self, retry=30):
+        """Read location data
 
-        Parameter:
-            loc_method:
-                - 1: gps
-                - 2: cell
-                - 3: cell & gps
-                - 4: wifi
-                - 5: wifi & gps
-                - 6: wifi & cell
-                - 7: wifi & cell & gps
+        args:
+            retry(int): gps read uart data retry count.
 
-        Return Data Format:
-        {
-            1: "$GPGGA,XXX",
-            2: (0.00, 0.00, 0.00),
-            4: (0.00, 0.00, 0.00),
-        }
+        Returns:
+            dict:
+                key:
+                    1 - GPS data
+                    2 - CELL data
+                    4 - WIFI data
+            .e.g:
+            {
+                1: "$GPGGA,XXX",
+                2: (0.00, 0.00, 0.00),
+                4: (0.00, 0.00, 0.00),
+            }
         """
         loc_data = {}
-        self.__locater_init(loc_method)
 
-        if loc_method & _loc_method.gps:
+        if self.__loc_method & _loc_method.gps:
             loc_data[_loc_method.gps] = self.__read_gps(retry)
 
-        if loc_method & _loc_method.cell:
+        if self.__loc_method & _loc_method.cell:
             loc_data[_loc_method.cell] = self.__read_cell()
 
-        if loc_method & _loc_method.wifi:
+        if self.__loc_method & _loc_method.wifi:
             loc_data[_loc_method.wifi] = self.__read_wifi()
 
         return loc_data

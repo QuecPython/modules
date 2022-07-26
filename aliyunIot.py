@@ -454,7 +454,7 @@ class AliYunIot(CloudObservable):
                 event_value = {}
                 if v:
                     for v_k, v_v in v.items():
-                        event_item = getattr(self.__object_model.events, k)
+                        event_item = getattr(self.__object_model.events, k).get(k, {})
                         if v_k in event_item.keys():
                             if isinstance(v_v, type(event_item[v_k])):
                                 event_value.update({v_k: v_v})

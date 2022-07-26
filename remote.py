@@ -117,6 +117,9 @@ class RemotePublish(Observable):
         """Cloud publish object model data"""
         return self.__cloud.post_data(data) if self.__cloud else False
 
+    def __cloud_status(self):
+        return self.__cloud.get_status() if self.__cloud else False
+
     def add_cloud(self, cloud):
         """Add Cloud object"""
         if hasattr(cloud, "init") and \
@@ -155,13 +158,20 @@ class RemotePublish(Observable):
         }
         """
         res = True
-        if self.__cloud_conn():
+        if not self.__cloud_status():
+            if not self.__cloud_conn():
+                res = False
+
+        if res:
             if not self.__cloud_post(data):
-                if self.__cloud_conn(enforce=True):
-                    if not self.__cloud_post(data):
+                if not self.__cloud_status():
+                    if not self.__cloud_conn(enforce=True):
                         res = False
+                    else:
+                        if not self.__cloud_post(data):
+                            res = False
                 else:
-                    log.error("Cloud Connect Failed.")
+                    log.error("Post data format error.")
                     res = False
         else:
             log.error("Cloud Connect Failed.")
