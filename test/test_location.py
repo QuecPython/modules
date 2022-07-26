@@ -110,7 +110,7 @@ def test_gps():
 
     while True:
         msg = "[test_gps] %s: GPS.read() gps_data: %s."
-        gps_data = gps_locator.read(retry=300)
+        gps_data = gps_locator.read(retry=1000)
         # assert gps_data[0] == 0, msg % ("FAILED", gps_data)
         print(msg % ("SUCCESS", gps_data))
         res["success"] += 1
@@ -183,12 +183,12 @@ def test_gps_time():
     gps = GPS(**_gps_cfg)
     # gps.power_switch(0)
     # utime.sleep(1)
-    gps.power_switch(1)
+    # gps.power_switch(1)
     gps_timer = osTimer()
     gps_timer.start(5, 1, timer_cb)
     count = 0
-    while count < 1000:
-        res = gps.read(retry=100)
+    while count < 100:
+        res = gps.read(retry=1000)
         log.debug("gps.read(): %s" % str(res))
         if res[0] == 0:
             break
@@ -200,7 +200,8 @@ def test_gps_time():
 
 
 if __name__ == "__main__":
-    test_gps()
+    # test_gps()
     # test_cell()
     # test_wifi()
     # test_location()
+    test_gps_time()
