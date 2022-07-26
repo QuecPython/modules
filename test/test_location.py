@@ -41,7 +41,8 @@ _gps_cfg = {
     "flowctl": 0,
     "PowerPin": None,
     "StandbyPin": None,
-    "BackupPin": None
+    "BackupPin": None,
+    "gps_mode": 0x1,
 }
 
 _cell_cfg = {
@@ -56,7 +57,6 @@ _wifi_cfg = {
     "token": "xGP77d2z0i91s67n"
 }
 
-gps_mode = 0x1
 locator_init_params = {
     "gps_cfg": _gps_cfg,
     "cell_cfg": _cell_cfg,
@@ -67,9 +67,9 @@ locator_init_params = {
 def test_gps():
     res = {"all": 0, "success": 0, "failed": 0}
 
-    gps_locator = GPS(_gps_cfg, gps_mode)
+    gps_locator = GPS(**_gps_cfg)
 
-    if _gps_cfg["PowerPin"] is not None or gps_mode == 1:
+    if _gps_cfg["PowerPin"] is not None or _gps_cfg["gps_mode"] == 1:
         msg = "[test_gps] %s: GPS.power_switch(0) res: %s."
         power_switch_res = gps_locator.power_switch(0)
         assert power_switch_res, msg % ("FAILED", power_switch_res)
@@ -110,7 +110,7 @@ def test_gps():
 
     while True:
         msg = "[test_gps] %s: GPS.read() gps_data: %s."
-        gps_data = gps_locator.read()
+        gps_data = gps_locator.read(retry=300)
         # assert gps_data[0] == 0, msg % ("FAILED", gps_data)
         print(msg % ("SUCCESS", gps_data))
         res["success"] += 1
@@ -131,7 +131,7 @@ def test_cell():
     res = {"all": 0, "success": 0, "failed": 0}
 
     msg = "[test_cell] %s: CellLocator.read() cell_data: %s."
-    cell_locator = CellLocator(_cell_cfg)
+    cell_locator = CellLocator(**_cell_cfg)
     cell_data = cell_locator.read()
     assert cell_data[0] == 0, msg % ("FAILED", cell_data)
     print(msg % ("SUCCESS", cell_data))
@@ -143,7 +143,7 @@ def test_wifi():
     res = {"all": 0, "success": 0, "failed": 0}
 
     msg = "[test_wifi] %s: WiFiLocator.read() cell_data: %s."
-    wifi_locator = WiFiLocator(_wifi_cfg)
+    wifi_locator = WiFiLocator(**_wifi_cfg)
     wifi_data = wifi_locator.read()
     assert wifi_data[0] == 0, msg % ("FAILED", wifi_data)
     print(msg % ("SUCCESS", wifi_data))
@@ -154,17 +154,17 @@ def test_wifi():
 def test_location():
     res = {"all": 0, "success": 0, "failed": 0}
 
-    locator = Location(gps_mode, locator_init_params)
-    for loc_method in range(1, 8):
-        loc_data = locator.read(loc_method)
-        if loc_method & 0x1:
-            assert loc_data.get(0x1) not in ("", (), None), "[test_location] FAILED: locator.read(%s) loc_data: %s." % (loc_method, loc_data)
-        if loc_method & 0x2:
-            assert loc_data.get(0x2) not in ("", (), None), "[test_location] FAILED: locator.read(%s) loc_data: %s." % (loc_method, loc_data)
-        if loc_method & 0x4:
-            assert loc_data.get(0x4) not in ("", (), None), "[test_location] FAILED: locator.read(%s) loc_data: %s." % (loc_method, loc_data)
-        print("[test_location] SUCCESS: locator.read(%s) loc_data: %s." % (loc_method, loc_data))
-        res["success"] += 1
+    loc_method = 7
+    locator = Location(loc_method, locator_init_params)
+    loc_data = locator.read()
+    if loc_method & 0x1:
+        assert loc_data.get(0x1) not in ("", (), None), "[test_location] FAILED: locator.read(%s) loc_data: %s." % (loc_method, loc_data)
+    if loc_method & 0x2:
+        assert loc_data.get(0x2) not in ("", (), None), "[test_location] FAILED: locator.read(%s) loc_data: %s." % (loc_method, loc_data)
+    if loc_method & 0x4:
+        assert loc_data.get(0x4) not in ("", (), None), "[test_location] FAILED: locator.read(%s) loc_data: %s." % (loc_method, loc_data)
+    print("[test_location] SUCCESS: locator.read(%s) loc_data: %s." % (loc_method, loc_data))
+    res["success"] += 1
 
     res["all"] = res["success"] + res["failed"]
 
@@ -180,7 +180,7 @@ def timer_cb(args):
 
 
 def test_gps_time():
-    gps = GPS(_gps_cfg, gps_mode, retry=100)
+    gps = GPS(**_gps_cfg)
     # gps.power_switch(0)
     # utime.sleep(1)
     gps.power_switch(1)
@@ -188,7 +188,7 @@ def test_gps_time():
     gps_timer.start(5, 1, timer_cb)
     count = 0
     while count < 1000:
-        res = gps.read()
+        res = gps.read(retry=100)
         log.debug("gps.read(): %s" % str(res))
         if res[0] == 0:
             break
