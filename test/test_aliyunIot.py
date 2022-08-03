@@ -28,9 +28,9 @@ def get_ali_loc_data(loc_method, loc_data):
             Latitude = __gps_parse.GxGGA_latitude(gga_data)
             if Latitude:
                 data["Latitude"] = float("%.2f" % float(Latitude))
-            Longtitude = __gps_parse.GxGGA_longtitude(gga_data)
-            if Longtitude:
-                data["Longtitude"] = float("%.2f" % float(Longtitude))
+            Longitude = __gps_parse.GxGGA_longitude(gga_data)
+            if Longitude:
+                data["Longitude"] = float("%.2f" % float(Longitude))
             Altitude = __gps_parse.GxGGA_altitude(gga_data)
             if Altitude:
                 data["Altitude"] = float("%.2f" % float(Altitude))
@@ -40,7 +40,7 @@ def get_ali_loc_data(loc_method, loc_data):
     elif loc_method in (0x2, 0x4):
         if loc_data:
             res["GeoLocation"] = {
-                "Longtitude": round(loc_data[0], 2),
+                "Longitude": round(loc_data[0], 2),
                 "Latitude": round(loc_data[1], 2),
                 # "Altitude": 0.0,
                 "CoordinateSystem": 1

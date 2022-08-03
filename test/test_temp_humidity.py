@@ -24,14 +24,14 @@
 @copyright :Copyright (c) 2022
 """
 
-
+from machine import I2C
 from usr.modules.temp_humidity_sensor import TempHumiditySensor
 
 
 def test_temp_humidity():
     res = {"all": 0, "success": 0, "failed": 0}
 
-    temp_humidity_obj = TempHumiditySensor()
+    temp_humidity_obj = TempHumiditySensor(i2cn=I2C.I2C1, mode=I2C.FAST_MODE)
 
     msg = "[test_temp_humidity] %s: temp_humidity_obj.on(): %s."
     on_res = temp_humidity_obj.on()

@@ -76,7 +76,7 @@ class AliObjectModel(CloudObjectModel):
                 - attribute value data format
                 {
                     "GeoLocation": {
-                        "Longtitude": 0.0,
+                        "Longitude": 0.0,
                         "Latitude": 0.0,
                         "Altitude": 0.0,
                         "CoordinateSystem": 0
@@ -387,7 +387,7 @@ class AliYunIot(CloudObservable):
                 "phone_num": "123456789",
                 "energy": 100,
                 "GeoLocation": {
-                    "Longtitude": 100.26,
+                    "Longitude": 100.26,
                     "Latitude": 26.86,
                     "Altitude": 0.0,
                     "CoordinateSystem": 1
@@ -622,7 +622,7 @@ class AliYunIot(CloudObservable):
                 "phone_num": "123456789",
                 "energy": 100,
                 "GeoLocation": {
-                    "Longtitude": 100.26,
+                    "Longitude": 100.26,
                     "Latitude": 26.86,
                     "Altitude": 0.0,
                     "CoordinateSystem": 1

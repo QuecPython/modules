@@ -30,17 +30,17 @@ from machine import I2C
 
 class TempHumiditySensor:
     """Read tempurature and humidity sensor value, reset sensor"""
-    def __init__(self):
-        self.__i2c = I2C(I2C.I2C1, I2C.STANDARD_MODE)
-        self.__data_cache = None
+    def __init__(self, i2cn=I2C.I2C1, mode=I2C.STANDARD_MODE, calibration=0xE1,
+                 start_measurment=0xAC, reset=0xBA, i2c_addr=0x38):
+        self.__i2c = I2C(i2cn, mode)
         # Initialization command
-        self.__CALIBRATION_CMD = 0xE1
+        self.__CALIBRATION_CMD = calibration
         # Trigger measurement
-        self.__START_MEASURMENT_CMD = 0xAC
+        self.__START_MEASURMENT_CMD = start_measurment
         # reset
-        self.__RESET_CMD = 0xBA
+        self.__RESET_CMD = reset
         # slave address
-        self.__i2c_addr = 0x38
+        self.__i2c_addr = i2c_addr
 
     def __write_data(self, data):
         """Write data to I2C

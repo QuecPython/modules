@@ -64,7 +64,7 @@ data = {
     "phone_num": "123456789",
     "energy": 100,
     "GeoLocation": {
-        "Longtitude": 100.26,
+        "Longitude": 100.26,
         "Latitude": 26.86,
         "Altitude": 0.0,
         "CoordinateSystem": 1
@@ -330,7 +330,7 @@ res = ali.post_data(data)
     "phone_num": "123456789",
     "energy": 100,
     "GeoLocation": {
-        "Longtitude": 100.26,
+        "Longitude": 100.26,
         "Latitude": 26.86,
         "Altitude": 0.0,
         "CoordinateSystem": 1

@@ -206,13 +206,13 @@ class GPSParse(object):
                 return str(float(latitude[:2]) + float(latitude[2:]) / 60)
         return ""
 
-    def GxGGA_longtitude(self, gga_data):
-        """Parse longtitude from GGA"""
+    def GxGGA_longitude(self, gga_data):
+        """Parse longitude from GGA"""
         if gga_data:
-            longtitude_re = ure.search(r",[0-9]+\.[0-9]+,[EW],", gga_data)
-            if longtitude_re:
-                longtitude = longtitude_re.group(0)[1:-3]
-                return str(float(longtitude[:3]) + float(longtitude[3:]) / 60)
+            longitude_re = ure.search(r",[0-9]+\.[0-9]+,[EW],", gga_data)
+            if longitude_re:
+                longitude = longitude_re.group(0)[1:-3]
+                return str(float(longitude[:3]) + float(longitude[3:]) / 60)
         return ""
 
     def GxGGA_altitude(self, gga_data):
@@ -380,9 +380,9 @@ class GPS(Singleton):
         """Read latitude from gps data"""
         return self.__gps_parse.GxGGA_latitude(self.__gps_match.GxGGA(gps_data))
 
-    def __read_longtitude(self, gps_data):
-        """Read longtitude from gps data"""
-        return self.__gps_parse.GxGGA_longtitude(self.__gps_match.GxGGA(gps_data))
+    def __read_longitude(self, gps_data):
+        """Read longitude from gps data"""
+        return self.__gps_parse.GxGGA_longitude(self.__gps_match.GxGGA(gps_data))
 
     def __read_altitude(self, gps_data):
         """Read altitude from gps data"""
@@ -674,15 +674,15 @@ class GPS(Singleton):
             map_coordinate_system: `WGS84` or GCJ02
 
         Return:
-            (longtitude, latitude, altitude)
+            (longitude, latitude, altitude)
         """
         latitude = self.__read_latitude(gps_data)
         latitude = float(latitude) if latitude else latitude
-        longtitude = self.__read_longtitude(gps_data)
-        longtitude = float(longtitude) if longtitude else longtitude
+        longitude = self.__read_longitude(gps_data)
+        longitude = float(longitude) if longitude else longitude
         altitude = self.__read_altitude(gps_data)
         altitude = float(altitude) if altitude else altitude
-        return (longtitude, latitude, altitude)
+        return (longitude, latitude, altitude)
 
     def power_switch(self, onoff):
         """GPS module power switch
@@ -1003,5 +1003,5 @@ class Location(Singleton):
 
         return loc_data
 
-    def wgs84togcj02(self, Longtitude, Latitude):
-        return WGS84ToGCJ02(Longtitude, Latitude)
+    def wgs84togcj02(self, Longitude, Latitude):
+        return WGS84ToGCJ02(Longitude, Latitude)

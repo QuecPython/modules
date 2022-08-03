@@ -79,8 +79,8 @@ gga_latitude = gps_parse.GxGGA_latitude(gga_data)
 print(gga_latitude)
 # "31.82221683333333"
 
-gga_longtitude = gps_parse.GxGGA_longtitude(gga_data)
-print(gga_longtitude)
+gga_longitude = gps_parse.GxGGA_longitude(gga_data)
+print(gga_longitude)
 # "117.1154593833333"
 
 gga_altitude = gps_parse.GxGGA_altitude(gga_data)
@@ -260,11 +260,11 @@ print(res)
 #### 3. 经纬度坐标系转换
 
 ```python
-wgs84_longtitude = 117.1154593833333
+wgs84_longitude = 117.1154593833333
 wgs84_latitude = 31.82221683333333
 
-gcj02_longtitude, gcj02_latitude = locator.wgs84togcj02(wgs84_longtitude, wgs84_latitude)
-print(gcj02_longtitude, gcj02_latitude)
+gcj02_longitude, gcj02_latitude = locator.wgs84togcj02(wgs84_longitude, wgs84_latitude)
+print(gcj02_longitude, gcj02_latitude)
 # 117.121085101472 31.82038457486135
 ```
 
@@ -279,11 +279,11 @@ print(gcj02_longtitude, gcj02_latitude)
 ```python
 from location import WGS84ToGCJ02
 
-wgs84_longtitude = 117.1154593833333
+wgs84_longitude = 117.1154593833333
 wgs84_latitude = 31.82221683333333
 
-gcj02_longtitude, gcj02_latitude = WGS84ToGCJ02(wgs84_longtitude, wgs84_latitude)
-print(gcj02_longtitude, gcj02_latitude)
+gcj02_longitude, gcj02_latitude = WGS84ToGCJ02(wgs84_longitude, wgs84_latitude)
+print(gcj02_longitude, gcj02_latitude)
 # 117.121085101472 31.82038457486135
 ```
 
@@ -490,7 +490,7 @@ print(gsv_data)
 |:---|---|
 |STRING|纬度|
 
-#### GxGGA_longtitude 经度
+#### GxGGA_longitude 经度
 
 参数:
 
@@ -564,8 +564,8 @@ gga_latitude = gps_parse.GxGGA_latitude(gga_data)
 print(gga_latitude)
 # "31.82221683333333"
 
-gga_longtitude = gps_parse.GxGGA_longtitude(gga_data)
-print(gga_longtitude)
+gga_longitude = gps_parse.GxGGA_longitude(gga_data)
+print(gga_longitude)
 # "117.1154593833333"
 
 gga_altitude = gps_parse.GxGGA_altitude(gga_data)
@@ -901,11 +901,11 @@ print(res)
 示例:
 
 ```python
-wgs84_longtitude = 117.1154593833333
+wgs84_longitude = 117.1154593833333
 wgs84_latitude = 31.82221683333333
 
-gcj02_longtitude, gcj02_latitude = locator.wgs84togcj02(wgs84_longtitude, wgs84_latitude)
-print(gcj02_longtitude, gcj02_latitude)
+gcj02_longitude, gcj02_latitude = locator.wgs84togcj02(wgs84_longitude, wgs84_latitude)
+print(gcj02_longitude, gcj02_latitude)
 # 117.121085101472 31.82038457486135
 ```
 
@@ -913,7 +913,7 @@ print(gcj02_longtitude, gcj02_latitude)
 
 |参数|类型|说明|
 |:---|---|---|
-|Longtitude|FLOAT|WGS84经度|
+|Longitude|FLOAT|WGS84经度|
 |Latitude|FLOAT|WGS84纬度|
 
 返回值:
