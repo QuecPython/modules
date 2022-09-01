@@ -112,11 +112,11 @@ gps_cfg = {
     "flowctl": 0,
     "PowerPin": None,
     "StandbyPin": None,
-    "BackupPin": None
+    "BackupPin": None,
+    "gps_mode": 2
 }
-gps_mode = 2
 
-gps = GPS(gps_cfg, gps_mode)
+gps = GPS(**gps_cfg)
 ```
 
 #### 2. 读取GPS数据
@@ -183,7 +183,7 @@ cell_cfg = {
     "profileIdx": 1,
 }
 
-cell = CellLocator(cell_cfg)
+cell = CellLocator(**cell_cfg)
 ```
 
 #### 2. 定位信息读取
@@ -205,7 +205,7 @@ wifi_cfg = {
     "token": "XXX"
 }
 
-wifi = WiFiLocator(wifi_cfg)
+wifi = WiFiLocator(**wifi_cfg)
 ```
 
 #### 2. 定位信息读取
@@ -241,7 +241,8 @@ locator_init_params = {
         "flowctl": 0,
         "UARTn": 1,
         "buadrate": 115200,
-        "databits": 8
+        "databits": 8,
+        "gps_mode": 2
     }
 }
 
@@ -601,11 +602,11 @@ gps_cfg = {
     "flowctl": 0,
     "PowerPin": None,
     "StandbyPin": None,
-    "BackupPin": None
+    "BackupPin": None,
+    "gps_mode": 2
 }
-gps_mode = 2
 
-gps = GPS(gps_cfg, gps_mode)
+gps = GPS(**gps_cfg)
 ```
 
 参数:
@@ -613,6 +614,15 @@ gps = GPS(gps_cfg, gps_mode)
 |参数|类型|说明|
 |:---|---|---|
 |gps_cfg|DICT|外置GPS读取uart配置信息, 内置GPS可以传空字典|
+|UARTn|INT|UART串口号|
+|buadrate|INT|波特率，常用波特率都支持，如4800、9600、19200、38400、57600、115200、230400等|
+|databits|INT|数据位（5 ~ 8），展锐平台当前仅支持8位|
+|parity|INT|奇偶校验（0 – NONE，1 – EVEN，2 - ODD）|
+|stopbits|INT|停止位（1 ~ 2）|
+|flowctl|INT|硬件控制流（0 – FC_NONE， 1 – FC_HW）|
+|PowerPin|INT|Power Pin对象|
+|StandbyPin|INT|Standby模式Pin对象|
+|BackupPin|INT|Backup模式Pin对象|
 |gps_mode|INT|1 - 内置GPS, 2 - 外置GPS|
 
 #### read 读取GPS数据
@@ -757,7 +767,7 @@ cell_cfg = {
     "profileIdx": 1,
 }
 
-cell = CellLocator(cell_cfg)
+cell = CellLocator(**cell_cfg)
 ```
 
 参数:
@@ -765,6 +775,11 @@ cell = CellLocator(cell_cfg)
 |参数|类型|说明|
 |:---|---|---|
 |cell_cfg|DICT|基站配置信息|
+|serverAddr|STR|服务器域名，长度必须小于255 bytes，目前仅支持 “www.queclocator.com”|
+|port|INT|服务器端口，目前仅支持 80 端口|
+|token|STR|密钥，16位字符组成，需要申请|
+|timeout|INT|设置超时时间，范围1-300s，默认300s|
+|profileIdx|INT|PDP索引，ASR平台范围1-8，展锐平台范围1-7|
 
 #### read 读取基站定位信息
 
@@ -801,14 +816,14 @@ wifi_cfg = {
     "token": "XXX"
 }
 
-wifi = WiFiLocator(wifi_cfg)
+wifi = WiFiLocator(**wifi_cfg)
 ```
 
 参数:
 
 |参数|类型|说明|
 |:---|---|---|
-|wifi_cfg|DICT|WIFI配置信息|
+|token|STR|密钥，16位字符组成，需要申请|
 
 #### read 读取基站定位信息
 
@@ -859,7 +874,8 @@ locator_init_params = {
         "flowctl": 0,
         "UARTn": 1,
         "buadrate": 115200,
-        "databits": 8
+        "databits": 8,
+        "gps_mode": 2
     }
 }
 
