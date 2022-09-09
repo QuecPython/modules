@@ -1,4 +1,4 @@
-import osTimer
+import utime
 from machine import UART
 from usr.modules.logging import getLogger
 from usr.modules.location import Location, GPS, CellLocator, WiFiLocator
@@ -171,37 +171,23 @@ def test_location():
     print("[test_location] ALL: %s SUCCESS: %s, FAILED: %s." % (res["all"], res["success"], res["failed"]))
 
 
-run_time = 0
-
-
-def timer_cb(args):
-    global run_time
-    run_time += 5
-
-
 def test_gps_time():
-    gps = GPS(**_gps_cfg)
-    # gps.power_switch(0)
-    # utime.sleep(1)
-    # gps.power_switch(1)
-    gps_timer = osTimer()
-    gps_timer.start(5, 1, timer_cb)
-    count = 0
-    while count < 100:
-        res = gps.read(retry=1000)
-        log.debug("gps.read(): %s" % str(res))
-        if res[0] == 0:
-            break
-        count += 1
+    from machine import Pin
+    Pin23 = Pin(Pin.GPIO31, Pin.OUT, Pin.PULL_PU, 1)
+    log.debug("Pin23: %s" % Pin23.read())
 
-    gps_timer.stop()
-    global run_time
-    log.debug("run_time: %s" % run_time)
+    gps = GPS(**_gps_cfg)
+    st = utime.ticks_ms()
+    res = gps.read(retry=300)
+    log.debug("gps.read(): %s" % str(res))
+    et = utime.ticks_ms()
+    run_time = utime.ticks_diff(et, st) / 1000
+    log.debug("run_time: %ss" % run_time)
 
 
 if __name__ == "__main__":
     # test_gps()
-    # test_cell()
+    test_cell()
     # test_wifi()
     # test_location()
-    test_gps_time()
+    # test_gps_time()

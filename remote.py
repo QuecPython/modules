@@ -159,7 +159,7 @@ class RemotePublish(Observable):
         """
         res = True
         if not self.__cloud_status():
-            if not self.__cloud_conn():
+            if not self.__cloud_conn(enforce=True):
                 res = False
 
         if res:

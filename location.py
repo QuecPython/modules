@@ -104,7 +104,7 @@ class GPSMatch(object):
         """
         if gps_data:
             rmc_re = ure.search(
-                r"\$G[NP]RMC,\d*\.*\d*,[AV],\d*\.*\d*,[NS],\d*\.*\d*,[EW],\d*\.*\d*,\d*\.*\d*,\d*,\d*\.*\d*,[EW]*,[ADEN]*,[SCUV]*\**(\d|\w)*",
+                r"\$G[NP]RMC,\d*\.*\d*,*[AV],*\d*\.*\d*,*[NS],*\d*\.*\d*,*[EW],*\d*\.*\d*,*\d*\.*\d*,*\d*,*\d*\.*\d*,*[EW]*,*[ADEN]*,*[SCUV]*\**(\d|\w)*",
                 gps_data)
             if rmc_re:
                 return rmc_re.group(0)
@@ -121,7 +121,7 @@ class GPSMatch(object):
         """
         if gps_data:
             gga_re = ure.search(
-                r"\$G[BLPN]GGA,\d*\.*\d*,\d*\.*\d*,[NS],\d*\.*\d*,[EW],[0126],\d*,\d*\.*\d*,-*\d*\.*\d*,M,-*\d*\.*\d*,M,\d*,\**(\d|\w)*",
+                r"\$G[BLPN]GGA,\d*\.*\d*,*\d*\.*\d*,*[NS],*\d*\.*\d*,*[EW],*[0126],*\d*,*\d*\.*\d*,*-*\d*\.*\d*,*M,*-*\d*\.*\d*,*M,*\d*,*\**(\d|\w)*",
                 gps_data)
             if gga_re:
                 return gga_re.group(0)
@@ -137,7 +137,7 @@ class GPSMatch(object):
             str: VTG NMEA string.
         """
         if gps_data:
-            vtg_re = ure.search(r"\$G[NP]VTG,\d*\.*\d*,T,\d*\.*\d*,M,\d*\.*\d*,N,\d*\.*\d*,K,[ADEN]*\*(\d|\w)*", gps_data)
+            vtg_re = ure.search(r"\$G[NP]VTG,\d*\.*\d*,*T,*\d*\.*\d*,*M,*\d*\.*\d*,*N,*\d*\.*\d*,*K,*[ADEN]*\*(\d|\w)*", gps_data)
             if vtg_re:
                 return vtg_re.group(0)
         return ""
@@ -152,7 +152,7 @@ class GPSMatch(object):
             str: GSV NMEA string.
         """
         if gps_data:
-            gsv_re = ure.search(r"\$G[NP]GSV,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*\**(\d|\w)*", gps_data)
+            gsv_re = ure.search(r"\$G[NP]GSV,\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*\**(\d|\w)*", gps_data)
             if gsv_re:
                 return gsv_re.group(0)
         return ""
@@ -167,7 +167,7 @@ class GPSMatch(object):
             str: GLL NMEA string.
         """
         if gps_data:
-            gll_re = ure.search(r"\$G[NP]GLL,\d*\.*\d*,[NS]*,\d*\.*\d*,[EW]*,\d*\.*\d*,[AV]*,[ADEN]*\**(\d|\w)*", gps_data)
+            gll_re = ure.search(r"\$G[NP]GLL,\d*\.*\d*,*[NS]*,*\d*\.*\d*,*[EW]*,*\d*\.*\d*,*[AV]*,*[ADEN]*\**(\d|\w)*", gps_data)
             if gll_re:
                 return gll_re.group(0)
 
@@ -181,7 +181,7 @@ class GPSMatch(object):
             str: GSA NMEA string.
         """
         if gps_data:
-            gsa_re = ure.search(r"\$G[NP]GSA,[MA]*,[123]*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*,\d*\.*\d*,\d*\.*\d*,\d*\.*\d*,(\d|\w)*\**(\d|\w)*", gps_data)
+            gsa_re = ure.search(r"\$G[NP]GSA,[MA]*,*[123]*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*,*\d*\.*\d*,*\d*\.*\d*,*\d*\.*\d*,*(\d|\w)*\**(\d|\w)*", gps_data)
             if gsa_re:
                 return gsa_re.group(0)
 
@@ -492,10 +492,12 @@ class GPS(Singleton):
 
         if not self.__rmc_data:
             self.__rmc_data = self.__gps_match.GxRMC(self.__get_gps_data())
-        if self.__rmc_data and self.__gps_parse.GxRMC_loc_status(self.__rmc_data):
-            if not self.__gga_data:
+        loc_status = self.__gps_parse.GxRMC_loc_status(self.__rmc_data)
+
+        if self.__rmc_data and loc_status:
+            if self.__nmea_statement_exist(self.__GGA) and not self.__gga_data:
                 self.__gga_data = self.__gps_match.GxGGA(self.__get_gps_data())
-            if not self.__gsv_data:
+            if self.__nmea_statement_exist(self.__GSV) and not self.__gsv_data:
                 self.__gsv_data = self.__gps_match.GxGSV(self.__get_gps_data())
             if self.__nmea_statement_exist(self.__GSA) and not self.__gsa_data:
                 self.__gsa_data = self.__gps_match.GxGSA(self.__get_gps_data())
@@ -504,14 +506,17 @@ class GPS(Singleton):
             if self.__nmea_statement_exist(self.__GLL) and not self.__gll_data:
                 self.__gll_data = self.__gps_match.GxGLL(self.__get_gps_data())
 
-            if self.__rmc_data and self.__gga_data and self.__gsv_data:
-                if self.__nmea_statement_exist(self.__GSA) and not self.__gsa_data:
-                    return False
-                if self.__nmea_statement_exist(self.__VTG) and not self.__vtg_data:
-                    return False
-                if self.__nmea_statement_exist(self.__GLL) and not self.__gll_data:
-                    return False
-                return True
+            if self.__nmea_statement_exist(self.__GGA) and not self.__gga_data:
+                return False
+            if self.__nmea_statement_exist(self.__GSV) and not self.__gsv_data:
+                return False
+            if self.__nmea_statement_exist(self.__GSA) and not self.__gsa_data:
+                return False
+            if self.__nmea_statement_exist(self.__VTG) and not self.__vtg_data:
+                return False
+            if self.__nmea_statement_exist(self.__GLL) and not self.__gll_data:
+                return False
+            return True
 
         return False
 
@@ -617,7 +622,9 @@ class GPS(Singleton):
             gnss_data = quecgnss.read(1024)
             if gnss_data and gnss_data[1]:
                 this_gps_data = gnss_data[1].decode() if len(gnss_data) > 1 and gnss_data[1] else ""
-                if self.__check_gps_valid(this_gps_data):
+                _gps_valid = self.__check_gps_valid(this_gps_data)
+                log.debug("_gps_valid: %s" % _gps_valid)
+                if _gps_valid:
                     self.__break = 1
             cycle += 1
             if cycle >= self.__retry:

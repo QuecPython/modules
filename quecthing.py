@@ -513,6 +513,7 @@ class QuecThing(CloudObservable):
             if self.get_status():
                 return True
 
+        self.close()
         quecIot.init()
         quecIot.setEventCB(self.__event_cb)
         quecIot.setProductinfo(self.__pk, self.__ps)
@@ -641,6 +642,14 @@ class QuecThing(CloudObservable):
             False: Failed
         """
         return quecIot.otaAction(action) if action in (0, 1, 2, 3) else False
+
+    def get_device_secret(self):
+        """Get device secret.
+
+        Returns:
+            str: device secret.
+        """
+        return self.__ds
 
 
 class QuecOTA(object):
