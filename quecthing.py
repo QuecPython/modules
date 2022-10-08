@@ -354,7 +354,7 @@ class QuecThing(CloudObservable):
         else:
             return False
 
-        log.debug("__data_format struct_info: %s" % str(struct_info))
+        # log.debug("__data_format struct_info: %s" % str(struct_info))
         if isinstance(v, dict):
             nv = {}
             for ik, iv in v.items():
@@ -578,42 +578,34 @@ class QuecThing(CloudObservable):
             Ture: Success
             False: Failed
         """
-        res = True
-        # log.debug("post_data: %s" % str(data))
-        for k, v in data.items():
-            om_data = self.__data_format(k, v)
-            log.debug("post_data om_data: %s" % str(om_data))
-            if om_data is not False:
-                if v is not None:
-                    phymodelReport_res = quecIot.phymodelReport(2, om_data)
-                    if not phymodelReport_res:
-                        res = False
-                        break
-                else:
-                    continue
-            elif k == "gps":
-                locReportOutside_res = quecIot.locReportOutside(v)
-                if not locReportOutside_res:
-                    res = False
-                    break
-            elif k == "non_gps":
-                locReportInside_res = quecIot.locReportInside(v)
-                if not locReportInside_res:
-                    res = False
-                    break
-            else:
-                v = {}
-                continue
+        if data.get("gps"):
+            if not quecIot.locReportOutside(data["gps"]):
+                return False
+            if not self.__get_post_res():
+                return False
+            data.pop("gps")
 
-            res = self.__get_post_res()
-            if res:
-                v = {}
-            else:
-                res = False
-                break
+        if data.get("non_gps"):
+            if not quecIot.locReportOutside(data["non_gps"]):
+                return False
+            if not self.__get_post_res():
+                return False
+            data.pop("non_gps")
 
-        self.__rm_empty_data(data)
-        return res
+        if data:
+            om_data = {}
+            for k, v in data.items():
+                _om_data = self.__data_format(k, v)
+                om_data.update(_om_data if _om_data else {})
+            if om_data:
+                if not quecIot.phymodelReport(2, om_data):
+                    return False
+                if not self.__get_post_res():
+                    return False
+            else:
+                return False
+
+        return True
 
     def device_report(self):
         return quecIot.devInfoReport([i for i in range(1, 13)])
