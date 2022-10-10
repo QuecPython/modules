@@ -230,6 +230,7 @@ class LowEnergyManage(Observable):
                 pm.delete_wakelock(self.__lpm_fd)
                 self.__lpm_fd = None
 
+            _thread.stack_size(64 * 1024)
             self.__thread_id = _thread.start_new_thread(self.__low_energy_work, ())
             if self.__low_energy_method == "PM":
                 self.pm_init()
