@@ -17,10 +17,7 @@ import ql_fs
 import ujson
 import _thread
 
-from usr.modules.logging import getLogger
 from usr.modules.common import Singleton, option_lock
-
-log = getLogger(__name__)
 
 _history_lock = _thread.allocate_lock()
 
@@ -37,7 +34,7 @@ class History(Singleton):
         self.__history = history_file
         self.__max_hist_num = max_hist_num
 
-    def __read_hist(self):
+    def __read(self):
         """Read history file info
 
         Return:
@@ -61,7 +58,7 @@ class History(Singleton):
                     pass
         return res
 
-    def __write_hist(self, data):
+    def __write(self, data):
         """Write data to history file
 
         Parameter:
@@ -106,8 +103,8 @@ class History(Singleton):
                 ],
             }
         """
-        res = self.__read_hist()
-        self.__write_hist({"data": []})
+        res = self.__read()
+        self.__write({"data": []})
         return res
 
     @option_lock(_history_lock)
@@ -128,11 +125,11 @@ class History(Singleton):
             },
         ]
         """
-        res = self.__read_hist()
+        res = self.__read()
         res["data"].extend(data)
         if len(res["data"]) > self.__max_hist_num:
             res["data"] = res["data"][self.__max_hist_num * -1:]
-        return self.__write_hist(res)
+        return self.__write(res)
 
     @option_lock(_history_lock)
     def clean(self):
@@ -142,7 +139,3 @@ class History(Singleton):
             return True
         except:
             return False
-
-    def update(self, observable, *args, **kwargs):
-        """Observer option, write data to history file."""
-        return self.write(list(args[1:]))

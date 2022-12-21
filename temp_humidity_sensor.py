@@ -24,7 +24,7 @@
 @copyright :Copyright (c) 2022
 """
 
-import utime as time
+import utime
 from machine import I2C
 
 
@@ -52,18 +52,15 @@ class TempHumiditySensor:
         """
         return self.__i2c.write(self.__i2c_addr, bytearray(0x00), 0, bytearray(data), len(data))
 
-    def __read_data(self, length):
+    def __read_data(self):
         """Read data from I2C
-
-        Args:
-            length(int): bytearray length
 
         Returns:
             list: revice data
         """
-        r_data = bytearray([0x00] * length)
-        self.__i2c.read(self.__i2c_addr, bytearray(0x00), 0, r_data, length, 0)
-        return list(r_data)
+        r_data = bytearray([0x00] * 6)
+        self.__i2c.read(self.__i2c_addr, bytearray(0x00), 0, r_data, 6, 0)
+        return self.__check_data(list(r_data))
 
     def __check_data(self, data):
         """Check recive data
@@ -76,6 +73,20 @@ class TempHumiditySensor:
         """
         return [] if (data[0] >> 7) != 0x0 else data[1:6]
 
+    def __calibrate(self):
+        """Calibrate i2c to read data.
+
+        Abstracted into sensor open.
+
+        Returns:
+            bool: True - success, False - falied.
+        """
+        write_res = self.__write_data([self.__CALIBRATION_CMD, 0x08, 0x00])
+        if write_res == 0:
+            utime.sleep_ms(300)  # at last 300ms
+            return True
+        return False
+
     def __start_measurment(self):
         """Trigger data conversion,send 0xAC, 0x33， 0x00
 
@@ -84,22 +95,23 @@ class TempHumiditySensor:
         """
         write_res = self.__write_data([self.__START_MEASURMENT_CMD, 0x33, 0x00])
         if write_res == 0:
-            time.sleep_ms(200)  # at last delay 75ms
+            utime.sleep_ms(80)  # at last delay 75ms
             return True
         return False
 
-    def __get_datas(self, length):
-        """Get valid i2c data
+    def __reset(self):
+        """Reset i2c to read data.
 
-        Args:
-            length(int): read data length
+        Abstracted into sensor close.
 
         Returns:
-            list: read data from i2c, return empty list if start measurment falied
+            bool: True - success, False - falied.
         """
-        if self.__start_measurment():
-            return self.__check_data(self.__read_data(length))
-        return []
+        write_res = self.__write_data([self.__RESET_CMD])
+        if write_res == 0:
+            utime.sleep_ms(30)  # at last 20ms
+            return True
+        return False
 
     def __get_humidity(self, data):
         """Read humidity from i2c data
@@ -125,34 +137,6 @@ class TempHumiditySensor:
         temperature = ((data[2] & 0xf) << 16) | (data[3] << 8) | data[4]
         return float("%.2f" % ((temperature * 200.0 / (1 << 20)) - 50))
 
-    def on(self):
-        """Calibrate i2c to read data.
-
-        Abstracted into sensor open.
-
-        Returns:
-            bool: True - success, False - falied.
-        """
-        write_res = self.__write_data([self.__CALIBRATION_CMD, 0x08, 0x00])
-        if write_res == 0:
-            time.sleep_ms(300)  # at last 300ms
-            return True
-        return False
-
-    def off(self):
-        """Reset i2c to read data.
-
-        Abstracted into sensor close.
-
-        Returns:
-            bool: True - success, False - falied.
-        """
-        write_res = self.__write_data([self.__RESET_CMD])
-        if write_res == 0:
-            time.sleep_ms(20)  # at last 20ms
-            return True
-        return False
-
     def read(self):
         """Read temperature and humidity from i2c
 
@@ -161,7 +145,11 @@ class TempHumiditySensor:
                 temperature(float): None if get failed else float data
                 humidity(float): None if get failed else float data
         """
-        data = self.__get_datas(6)
-        if not data:
-            return (None, None)
-        return self.__get_temperature(data), self.__get_humidity(data)
+        res = (None, None)
+        if self.__calibrate():
+            if self.__start_measurment():
+                data = self.__read_data()
+                if data:
+                    res = self.__get_temperature(data), self.__get_humidity(data)
+        self.__reset()
+        return res

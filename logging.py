@@ -17,7 +17,7 @@ import utime
 
 class Logger:
     def __init__(self, name):
-        self.name = name
+        self.__name = name
         self.__debug = True
         self.__level = "debug"
         self.__level_code = {
@@ -28,28 +28,16 @@ class Logger:
             "critical": 4,
         }
 
-    def __log(self, name, level, *message):
+    def __log(self, level, *message):
         if self.__debug is False:
             if self.__level == "debug" and level == "debug":
                 return
             if self.__level_code.get(level) < self.__level_code.get(self.__level):
                 return
 
-        if hasattr(utime, "strftime"):
-            print(
-                "[{}]".format(utime.strftime("%Y-%m-%d %H:%M:%S")),
-                "[{}]".format(name),
-                "[{}]".format(level),
-                *message
-            )
-        else:
-            t = utime.localtime()
-            print(
-                "[{}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}]".format(*t),
-                "[{}]".format(name),
-                "[{}]".format(level),
-                *message
-            )
+        _time = "{}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}".format(*utime.localtime())
+        msg = "[{}][{}][{}]".format(_time, self.__name, level)
+        print(msg, *message)
 
     def get_debug(self):
         return self.__debug
@@ -70,19 +58,19 @@ class Logger:
         return False
 
     def critical(self, *message):
-        self.__log(self.name, "critical", *message)
+        self.__log("critical", *message)
 
     def error(self, *message):
-        self.__log(self.name, "error", *message)
+        self.__log("error", *message)
 
     def warn(self, *message):
-        self.__log(self.name, "warn", *message)
+        self.__log("warn", *message)
 
     def info(self, *message):
-        self.__log(self.name, "info", *message)
+        self.__log("info", *message)
 
     def debug(self, *message):
-        self.__log(self.name, "debug", *message)
+        self.__log("debug", *message)
 
 
 def getLogger(name):

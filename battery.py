@@ -43,16 +43,16 @@ class Battery(object):
     This class can get battery voltage and energy.
     if adc_args is not None, use cbc to read battery
 
-    adc_args: (adc_num, adc_period, factor)
-
-        adc_num: ADC channel num
-        adc_period: Cyclic read ADC cycle period
-        factor: calculation coefficient
-
-    chrg_gpion: CHRG GPIOn
-    stdby_gpion: STDBY GPIOn
+    Args:
+        adc_args(tuple): (adc_num, adc_period, factor)
+            adc_num: ADC channel num
+            adc_period: Cyclic read ADC cycle period
+            factor: calculation coefficient
+        chrg_gpion(int): CHRG GPIOn
+        stdby_gpion(int): STDBY GPIOn
+        battery_ocv(str): Battery OCV name
     """
-    def __init__(self, adc_args=None, chrg_gpion=None, stdby_gpion=None):
+    def __init__(self, adc_args=None, chrg_gpion=None, stdby_gpion=None, battery_ocv="nix_coy_mnzo2"):
         self.__energy = 100
         self.__temp = 20
 
@@ -79,6 +79,10 @@ class Battery(object):
         self.__stdby_exint = None
         if self.__chrg_gpion is not None and self.__stdby_gpion is not None:
             self.__init_charge()
+
+        if not BATTERY_OCV_TABLE.get(battery_ocv):
+            raise TypeError("Battery OCV %s is not support." % battery_ocv)
+        self.__battery_ocv = battery_ocv
 
     def __chrg_callback(self, args):
         """Charge status change callback"""
@@ -117,15 +121,15 @@ class Battery(object):
 
     def __get_soc_from_dict(self, key, volt_arg):
         """Get battery energy from map"""
-        if key in BATTERY_OCV_TABLE["nix_coy_mnzo2"]:
-            volts = sorted(BATTERY_OCV_TABLE["nix_coy_mnzo2"][key].keys(), reverse=True)
+        if BATTERY_OCV_TABLE[self.__battery_ocv].get(key):
+            volts = sorted(BATTERY_OCV_TABLE[self.__battery_ocv][key].keys(), reverse=True)
             pre_volt = 0
             volt_not_under = 0  # Determine whether the voltage is lower than the minimum voltage value of soc.
             for volt in volts:
                 if volt_arg > volt:
                     volt_not_under = 1
-                    soc1 = BATTERY_OCV_TABLE["nix_coy_mnzo2"][key].get(volt, 0)
-                    soc2 = BATTERY_OCV_TABLE["nix_coy_mnzo2"][key].get(pre_volt, 0)
+                    soc1 = BATTERY_OCV_TABLE[self.__battery_ocv][key].get(volt, 0)
+                    soc2 = BATTERY_OCV_TABLE[self.__battery_ocv][key].get(pre_volt, 0)
                     break
                 else:
                     pre_volt = volt
@@ -136,15 +140,14 @@ class Battery(object):
             else:
                 return soc2 - (soc2 - soc1) * (pre_volt - volt_arg) // (pre_volt - volt)
 
-    def __get_soc(self, temp, volt_arg, bat_type="nix_coy_mnzo2"):
+    def __get_soc(self, temp, volt_arg):
         """Get battery energy by temperature and voltage"""
-        if bat_type == "nix_coy_mnzo2":
-            if temp > 30:
-                return self.__get_soc_from_dict(55, volt_arg)
-            elif temp < 10:
-                return self.__get_soc_from_dict(0, volt_arg)
-            else:
-                return self.__get_soc_from_dict(20, volt_arg)
+        if temp > 30:
+            return self.__get_soc_from_dict(55, volt_arg)
+        elif temp < 10:
+            return self.__get_soc_from_dict(0, volt_arg)
+        else:
+            return self.__get_soc_from_dict(20, volt_arg)
 
     def __get_power_vbatt(self):
         """Get vbatt from power"""
@@ -172,18 +175,6 @@ class Battery(object):
             return True
         return False
 
-    def get_voltage(self):
-        """Get battery voltage"""
-        if self.__adc is None:
-            return self.__get_power_vbatt()
-        else:
-            return self.__get_adc_vbatt()
-
-    def get_energy(self):
-        """Get battery energy"""
-        self.__energy = self.__get_soc(self.__temp, self.get_voltage())
-        return self.__energy
-
     def set_charge_callback(self, charge_callback):
         """Set charge status change callback"""
         if self.__chrg_gpion is not None and self.__stdby_gpion is not None:
@@ -192,7 +183,22 @@ class Battery(object):
                 return True
         return False
 
-    def get_charge_status(self):
+    @property
+    def voltage(self):
+        """Get battery voltage"""
+        if self.__adc is None:
+            return self.__get_power_vbatt()
+        else:
+            return self.__get_adc_vbatt()
+
+    @property
+    def energy(self):
+        """Get battery energy"""
+        self.__energy = self.__get_soc(self.__temp, self.voltage)
+        return self.__energy
+
+    @property
+    def charge_status(self):
         """Get charge status
         Returns:
             0 - Not charged

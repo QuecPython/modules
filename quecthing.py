@@ -18,21 +18,14 @@ import uzlib
 import ql_fs
 import ujson
 import utime
-import osTimer
+import quecIot
 import uhashlib
 import ubinascii
 import app_fota_download
 
 from misc import Power
-from queue import Queue
 
 from usr.modules.logging import getLogger
-from usr.modules.common import CloudObservable, CloudObjectModel
-
-try:
-    import quecIot
-except ImportError:
-    quecIot = None
 
 log = getLogger(__name__)
 
@@ -106,545 +99,289 @@ EVENT_CODE = {
 }
 
 
-class QuecObjectModel(CloudObjectModel):
-    """This class is queccloud object model
+class QuecObjectModel:
 
-    This class extend CloudObjectModel
+    def __init__(self, file="/usr/quec_object_model.json"):
+        self.__file = file
+        if not ql_fs.path_exists(self.__file):
+            raise ValueError("File %s is not exists!" % self.__file)
+        self.__events = {}
+        self.__services = {}
+        self.__properties = {}
+        self.__id_code = {}
+        self.__init_object_model()
 
-    Attribute:
-        events:
-            Attribute:
-                - object model event
-                - attribute value data format
-                {
-                    "sos_alert": {
-                        local_time: 0
+    def __init_properties(self, properties):
+        for _property in properties:
+            self.__properties[_property["code"]] = {
+                "id": _property["id"],
+                "struct": {
+                    "id_code": {},
+                    "code_id": {},
+                }
+            }
+            self.__id_code[_property["id"]] = _property["code"]
+            if _property["dataType"].lower() == "struct":
+                struct = _property["specs"]
+                id_code = {i["id"]: i["code"] for i in struct}
+                code_id = {i["code"]: i["id"] for i in struct}
+                self.__properties[_property["code"]]["struct"]["id_code"] = id_code
+                self.__properties[_property["code"]]["struct"]["code_id"] = code_id
+
+    def __init_struct(self, items):
+        # properties_id = [int(i["$ref"].split("/")[-1]) for i in items]
+        # return {self.__id_code[_id]: self.__properties[self.__id_code[_id]] for _id in properties_id}
+        _struct = {}
+        for i in items:
+            if i.get("$ref"):
+                _id = int(i["$ref"].split("/")[-1])
+                _struct[self.__id_code[_id]] = self.__properties[self.__id_code[_id]]
+            elif i.get("id") and i.get("code"):
+                _struct[i["code"]] = {
+                    "id": i["id"],
+                    "struct": {
+                        "id_code": {},
+                        "code_id": {},
                     }
                 }
-        properties:
-            Attribute:
-                - object model property
-                - attribute value data format
-                {
-                    "energy": 0,
-                    "power_switch": True
-                    "phone_num": ""
-                }
-        id_code:
-            - queccloud object model id and name map
-            - data format
-            {
-                4: "energy",
-                9: "power_switch",
-                23: "phone_num"
+                if i["dataType"].lower() == "struct":
+                    _struct_ = i["specs"]
+                    id_code = {i["id"]: i["code"] for i in _struct_}
+                    code_id = {i["code"]: i["id"] for i in _struct_}
+                    _struct[i["code"]]["struct"]["id_code"] = id_code
+                    _struct[i["code"]]["struct"]["code_id"] = code_id
+            else:
+                log.error("Can not parse data: %s" % str(i))
+        return _struct
+
+    def __init_events(self, events):
+        for event in events:
+            self.__events[event["code"]] = {
+                "id": event["id"],
+                "output": {}
             }
-        code_id:
-            - queccloud object model id and name map
-            - data format
-            {
-                "energy": 4,
-                "power_switch": 9,
-                "phone_num": 23
+            _output = event.get("outputData", [])
+            self.__events[event["code"]]["output"] = self.__init_struct(_output)
+
+    def __init_services(self, services):
+        for service in services:
+            self.__services[service["code"]] = {
+                "id": service["id"],
+                "output": {},
+                "input": {}
             }
-        struct_code_id:
-            - data format
-            {
-                "sos_alert": {
-                    "local_time": 19
-                }
-            }
-    """
+            _output = service.get("outputData", [])
+            self.__services[service["code"]]["output"] = self.__init_struct(_output)
+            _input = service.get("inputData", [])
+            self.__services[service["code"]]["input"] = self.__init_struct(_input)
+            self.__id_code[service["id"]] = service["code"]
 
-    def __init__(self, om_file="/usr/quec_object_model.json"):
-        super().__init__(om_file)
-        self.code_id = {}
-        self.id_code = {}
-        self.struct_code_id = {}
-        self.init()
+    def __init_object_model(self):
+        with open(self.__file, "rb") as f:
+            _obj_model = ujson.load(f)
+            self.__init_properties(_obj_model.get("properties", []))
+            self.__init_events(_obj_model.get("events", []))
+            self.__init_services(_obj_model.get("services", []))
 
-    def __init_value(self, om_type):
-        if om_type in ("int", "enum", "date"):
-            om_value = 0
-        elif om_type in ("float", "double"):
-            om_value = 0.0
-        elif om_type == "bool":
-            om_value = True
-        elif om_type == "text":
-            om_value = ""
-        elif om_type == "array":
-            om_value = []
-        elif om_type == "struct":
-            om_value = {}
-        else:
-            om_value = None
-        return om_value
+    def convert_to_server(self, data):
+        _data = {}
+        for k, v in data.items():
+            if k in self.__properties.keys():
+                _data[self.__properties[k]["id"]] = v
+                if self.__properties[k]["struct"]["code_id"]:
+                    __v = {}
+                    for _k, _v in v.items():
+                        if _k in self.__properties[k]["struct"]["code_id"].keys():
+                            __v[self.__properties[k]["struct"]["code_id"][_k]] = _v
+                    _data[self.__properties[k]["id"]] = __v
+            elif k in self.__events.keys():
+                _data[self.__events[k]["id"]] = v
+                __v = {}
+                for _k, _v in v.items():
+                    if _k in self.__events[k]["output"].keys():
+                        __v[self.__events[k]["output"][_k]["id"]] = _v
+                _data[self.__events[k]["id"]] = __v
+            elif k in self.__services.keys():
+                _data[self.__services[k]["id"]] = v
+                __v = {}
+                for _k, _v in v.items():
+                    if _k in self.__events[k]["output"].keys():
+                        __v[self.__services[k]["output"][_k]["id"]] = _v
+                _data[self.__services[k]["id"]] = __v
+            else:
+                log.warn("Key[%s] Value[%s] is not compare." % (k, v))
+        return _data
 
-    def __get_property(self, om_item):
-        om_item_key = om_item["code"]
-        om_item_type = om_item["dataType"].lower()
-        om_item_val = self.__init_value(om_item_type)
-        self.id_code[om_item["id"]] = om_item["code"]
-        self.code_id[om_item["code"]] = om_item["id"]
-        if om_item_type == "struct":
-            om_item_struct = om_item["specs"]
-            om_item_val = {i["code"]: self.__init_value(i["dataType"].lower()) for i in om_item_struct}
-            self.struct_code_id[om_item["code"]] = {i["code"]: i["id"] for i in om_item_struct}
-        return om_item_key, om_item_val
+    def convert_to_client(self, data):
+        _data = {
+            "property": {},
+            "service": {},
+        }
+        for k, v in data.items():
+            code = self.__id_code.get(k)
+            if code:
+                if self.__properties.get(code):
+                    _data["property"][code] = v
+                    if isinstance(v, dict):
+                        __v = {}
+                        for _k, _v in v.items():
+                            __v[self.__properties[code]["struct"]["id_code"][_k]] = _v
+                        _data["property"][code] = __v
+                elif self.__services.get(code):
+                    _data["service"][code] = v
+                    # TODO: Parse servier value if value is dict.
+            else:
+                log.error("Key[%s] Value[%s] is not compare." % (k, v))
+        return _data
 
-    def __init_properties(self, om_properties):
-        for om_property in om_properties:
-            om_property_key, om_property_val = self.__get_property(om_property)
-            setattr(self.properties, om_property_key, {om_property_key: om_property_val})
-
-    def __init_events(self, om_events):
-        for om_event in om_events:
-            om_event_key = om_event["code"]
-            om_event_out_put = om_event.get("outputData", [])
-            om_event_val = {}
-            self.id_code[om_event["id"]] = om_event["code"]
-            self.code_id[om_event["code"]] = om_event["id"]
-            if om_event_out_put:
-                for om_property in om_event_out_put:
-                    property_id = int(om_property.get("$ref", "").split("/")[-1])
-                    om_property_key = self.id_code.get(property_id)
-                    om_event_val.update(getattr(self.properties, om_property_key))
-            setattr(self.events, om_event_key, {om_event_key: om_event_val})
-
-    def __init_services(self, om_services):
-        for om_service in om_services:
-            om_service_key = om_service["code"]
-            om_service_output = om_service.get("outputData", [])
-            om_service_input = om_service.get("inputData", [])
-            om_service_output_val = {}
-            om_service_input_val = {}
-            self.id_code[om_service["id"]] = om_service["code"]
-            self.code_id[om_service["code"]] = om_service["id"]
-            if om_service_output:
-                for om_property in om_service_output:
-                    property_id = int(om_property.get("$ref", "").split("/")[-1])
-                    om_property_key = self.id_code.get(property_id)
-                    om_service_output_val.update(getattr(self.properties, om_property_key))
-            if om_service_input:
-                for om_property in om_service_input:
-                    property_id = int(om_property.get("$ref", "").split("/")[-1])
-                    om_property_key = self.id_code.get(property_id)
-                    om_service_input_val.update(getattr(self.properties, om_property_key))
-            setattr(self.services, om_service_key, {"output": om_service_output_val, "input": om_service_input_val})
-
-    def init(self):
-        with open(self.om_file, "rb") as f:
-            cloud_object_model = ujson.load(f)
-            self.__init_properties(cloud_object_model.get("properties", []))
-            self.__init_events(cloud_object_model.get("events", []))
-            self.__init_services(cloud_object_model.get("services", []))
+    @property
+    def id_code(self):
+        return self.__id_code
 
 
-class QuecThing(CloudObservable):
-    """This is a class for queccloud iot.
+class QuecThing:
 
-    This class extend CloudObservable.
-
-    This class has the following functions:
-        1. Cloud connect and disconnect
-        2. Publish data to cloud
-        3. Monitor data from cloud by event callback
-
-    Run step:
-        1. cloud = QuecThing(pk, ps, dk, ds, server)
-        2. cloud.addObserver(RemoteSubscribe)
-        3. cloud.set_object_model(QuecObjectModel)
-        4. cloud.init()
-        5. cloud.post_data(data)
-        6. cloud.close()
-    """
-
-    def __init__(self, pk, ps, dk, ds, server, life_time=120, mcu_name="", mcu_version="", mode=1):
-        """
-        1. Init parent class CloudObservable
-        2. Init cloud connect params
-        """
-        super().__init__()
+    def __init__(self, pk, ps, dk, ds, mode=1, server="iot-south.quectel.com:1883", life_time=120, fw_name="", fw_version=""):
         self.__pk = pk
         self.__ps = ps
         self.__dk = dk
         self.__ds = ds
+        self.__mode = mode
         self.__server = server
         self.__life_time = life_time
-        self.__mcu_name = mcu_name
-        self.__mcu_version = mcu_version
-        self.__mode = mode
-        self.__object_model = None
+        self.__fw_name = fw_name
+        self.__fw_version = fw_version
+        self.__callback = None
+        self.__report_res = {}
 
-        self.__ota = QuecOTA()
-        self.__post_result_wait_queue = Queue(maxsize=16)
-        self.__quec_timer = osTimer()
-
-    def __rm_empty_data(self, data):
-        """Remove post success data item from data"""
-        for k, v in data.items():
-            if not v:
-                del data[k]
-
-    def __quec_timer_cb(self, args):
-        """osTimer callback to break waiting of get publish result"""
-        self.__put_post_res(False)
-
-    def __get_post_res(self):
-        """Get publish result"""
-        self.__quec_timer.start(1000 * 10, 0, self.__quec_timer_cb)
-        res = self.__post_result_wait_queue.get()
-        self.__quec_timer.stop()
-        return res
-
-    def __put_post_res(self, res):
-        """Save publish result to queue"""
-        if self.__post_result_wait_queue.size() >= 16:
-            self.__post_result_wait_queue.get()
-        self.__post_result_wait_queue.put(res)
-
-    def __data_format(self, k, v):
-        """Publish data format by AliObjectModel
-
-        Parameter:
-            k: object model name
-            v: object model value
-
-        return:
-            {
-                "object_model_id": object_model_value
-            }
-
-        e.g.:
-        k:
-            "sos_alert"
-
-        v:
-            {"local_time": 1649995898000}
-
-        return data:
-            {
-                6: {
-                    19: 1649995898000
-                }
-            }
-        """
-        # log.debug("k: %s, v: %s" % (k, v))
-        k_id = None
-        struct_info = {}
-        if hasattr(self.__object_model.properties, k):
-            k_id = self.__object_model.code_id[k]
-            if self.__object_model.struct_code_id.get(k):
-                struct_info = self.__object_model.struct_code_id.get(k)
-        elif hasattr(self.__object_model.events, k):
-            k_id = self.__object_model.code_id[k]
-            event_struct_info = getattr(self.__object_model.events, k)
-            for i in event_struct_info[k].keys():
-                if isinstance(getattr(self.__object_model.properties, i).get(i), dict):
-                    struct_info[i] = self.__object_model.struct_code_id.get(i, None)
-                else:
-                    struct_info[i] = self.__object_model.code_id[i]
-        elif hasattr(self.__object_model.services, k):
-            k_id = self.__object_model.code_id[k]
-            service_struct_info = getattr(self.__object_model.services, k)
-            for i in service_struct_info["output"].keys():
-                if isinstance(getattr(self.__object_model.properties, i).get(i), dict):
-                    struct_info[i] = self.__object_model.struct_code_id.get(i, None)
-                else:
-                    struct_info[i] = self.__object_model.code_id[i]
-        else:
-            return False
-
-        # log.debug("__data_format struct_info: %s" % str(struct_info))
-        if isinstance(v, dict):
-            nv = {}
-            for ik, iv in v.items():
-                if isinstance(struct_info.get(ik), int):
-                    nv[struct_info[ik]] = iv
-                elif isinstance(struct_info.get(ik), dict):
-                    if isinstance(iv, dict):
-                        nv[self.__object_model.code_id[ik]] = {struct_info[ik][ivk]: ivv for ivk, ivv in iv.items()}
-                    else:
-                        nv[self.__object_model.code_id[ik]] = iv
-                else:
-                    nv[ik] = iv
-            v = nv
-
-        return {k_id: v}
-
-    def __event_cb(self, data):
-        """Queccloud downlink message callback
-
-        Parameter:
-            data: response dictionary info, all event info see `EVENT_CODE`
-            data format: (`event_code`, `errcode`, `event_data`)
-                - `event_code`: event code
-                - `errcode`: detail code
-                - `event_data`: event data info, data type: bytes or dict
-        """
-        res_datas = []
-        event = data[0]
-        errcode = data[1]
-        eventdata = b""
-        if len(data) > 2:
-            eventdata = data[2]
-        log.info("[Event-ErrCode-Msg][%s][%s][%s] EventData[%s]" % (event, errcode, EVENT_CODE.get(event, {}).get(errcode, ""), eventdata))
-
+    def __event_callback(self, args):
+        _data = ()
+        event, errcode = args[:2]
+        data = args[2] if len(args) > 2 else b""
+        log.debug("Event[%s] ErrCode[%s] Data[%s]" % (event, errcode, data))
+        if event in (1, 2, 3, 6):
+            if errcode == 10200:
+                msg = ""
+                if event == 1:
+                    msg = "Device authentication succeeded."
+                elif event == 2:
+                    msg = "Access is successful."
+                elif event == 3:
+                    msg = "Subscription succeeded."
+                elif event == 6:
+                    msg = "Logout succeeded (disconnection succeeded)."
+                log.debug(msg)
         if event == 4:
             if errcode == 10200:
-                self.__put_post_res(True)
-            elif errcode == 10210:
-                self.__put_post_res(True)
-            elif errcode == 10220:
-                self.__put_post_res(True)
+                self.__set_report_res(0, True)
             elif errcode == 10300:
-                self.__put_post_res(False)
-            elif errcode == 10310:
-                self.__put_post_res(False)
-            elif errcode == 10320:
-                self.__put_post_res(False)
-        elif event == 5:
-            if errcode == 10200:
-                # TODO: Data Type Passthrough (Not Support Now).
-                res_data = ("raw_data", eventdata)
-                res_datas.append(res_data)
+                self.__set_report_res(0, False)
             elif errcode == 10210:
-                dl_data = []
-                for k, v in eventdata.items():
-                    event_item = ()
-                    if isinstance(v, bytes):
-                        event_item = (self.__object_model.id_code.get(k, k), v.decode())
-                    elif isinstance(v, dict):
-                        event_item = (self.__object_model.id_code.get(k, k), {self.__object_model.id_code.get(v_k, v_k): v_v for v_k, v_v in v.items()})
-                    else:
-                        event_item = (self.__object_model.id_code.get(k, k), v)
-                    if not hasattr(self.__object_model.services, self.__object_model.id_code.get(k, k)):
-                        dl_data.append(event_item)
-                    else:
-                        dl_data.append(("thing_services", {"data": event_item[1], "service": event_item[0]}))
-                res_data = ("object_model", dl_data)
-                res_datas.append(res_data)
-            elif errcode == 10211:
-                # eventdata[0] is pkgId.
-                object_model_ids = eventdata[1]
-                object_model_val = [self.__object_model.id_code[i] for i in object_model_ids if self.__object_model.id_code.get(i)]
-                res_data = ("query", object_model_val)
-                res_datas.append(res_data)
-        elif event == 7:
-            if errcode == 10700:
-                if eventdata:
-                    file_info = eval(eventdata)
-                    log.info("OTA File Info: componentNo: %s, sourceVersion: %s, targetVersion: %s, "
-                             "batteryLimit: %s, minSignalIntensity: %s, useSpace: %s" % file_info)
-                    res_data = ("object_model", [("ota_status", (file_info[0], 1, file_info[2]))])
-                    res_datas.append(res_data)
-                    ota_cfg = {
-                        "componentNo": file_info[0],
-                        "sourceVersion": file_info[1],
-                        "targetVersion": file_info[2],
-                        "batteryLimit": file_info[3],
-                        "minSignalIntensity": file_info[4],
-                        "useSpace": file_info[5],
-                    }
-                    res_data = ("ota_plain", [("ota_cfg", ota_cfg)])
-                    res_datas.append(res_data)
-            elif errcode == 10701:
-                res_data = ("object_model", [("ota_status", (None, 2, None))])
-                res_datas.append(res_data)
-                file_info = eval(eventdata)
-                ota_info = {
-                    "componentNo": file_info[0],
-                    "length": file_info[1],
-                    "MD5": file_info[2],
-                }
-                self.__ota.set_ota_info(ota_info["length"], ota_info["MD5"])
-            elif errcode == 10702:
-                res_data = ("object_model", [("ota_status", (None, 2, None))])
-                res_datas.append(res_data)
-            elif errcode == 10703:
-                res_data = ("object_model", [("ota_status", (None, 2, None))])
-                res_datas.append(res_data)
-                file_info = eval(eventdata)
-                ota_info = {
-                    "componentNo": file_info[0],
-                    "length": file_info[1],
-                    "startaddr": file_info[2],
-                    "piece_length": file_info[3],
-                }
-                self.__ota.start_ota(ota_info["startaddr"], ota_info["piece_length"])
-            elif errcode == 10704:
-                res_data = ("object_model", [("ota_status", (None, 2, None))])
-                res_datas.append(res_data)
-            elif errcode == 10705:
-                res_data = ("object_model", [("ota_status", (None, 3, None))])
-                res_datas.append(res_data)
-            elif errcode == 10706:
-                res_data = ("object_model", [("ota_status", (None, 4, None))])
-                res_datas.append(res_data)
+                self.__set_report_res(1, True)
+            elif errcode == 10310:
+                self.__set_report_res(1, False)
+            elif errcode == 10220:
+                self.__set_report_res(2, True)
+            elif errcode == 10320:
+                self.__set_report_res(2, False)
+        if event in (5, 7):
+            _data = (event, errcode, data)
+            if self.__callback:
+                self.__callback(_data)
 
-        if res_datas:
-            for res_data in res_datas:
-                self.notifyObservers(self, *res_data)
+    def __get_device_secret(self):
+        if self.__dk and not self.__ds:
+            retry = 0
+            while retry < 5:
+                if self.status:
+                    dk_ds = quecIot.getDkDs()
+                    if dk_ds:
+                        self.__dk, self.__ds = dk_ds
+                        break
+                retry += 1
+                utime.sleep(1)
 
-    def set_object_model(self, object_model):
-        """Register QuecObjectModel to this class"""
-        if object_model and isinstance(object_model, QuecObjectModel):
-            self.__object_model = object_model
+    def __get_report_res(self, mode):
+        report_res = False
+        retry = 0
+        while retry < 10:
+            if mode in self.__report_res.keys():
+                report_res = self.__report_res.pop(mode)
+                break
+            retry += 1
+            utime.sleep(1)
+
+        return report_res
+
+    def __set_report_res(self, mode, res):
+        self.__report_res[mode] = res
+
+    @property
+    def status(self):
+        ws = quecIot.getWorkState()
+        cm = quecIot.getConnmode()
+        log.debug("QuecIot WorkState[%s] ConnMode[%s]" % (ws, cm))
+        return True if ws == 8 and cm == 1 else False
+
+    @property
+    def device_secret(self):
+        return self.__ds
+
+    def set_callback(self, callback):
+        if callable(callback):
+            self.__callback = callback
             return True
         return False
 
-    def init(self, enforce=False):
-        """queccloud connect
+    def connect(self):
+        if not quecIot.init():
+            return 1
+        if not quecIot.setEventCB(self.__event_callback):
+            return 2
+        if not quecIot.setProductinfo(self.__pk, self.__ps):
+            return 3
+        if self.__dk:
+            if not quecIot.setDkDs(self.__dk, self.__ds):
+                return 4
+        if not quecIot.setServer(self.__mode, self.__server):
+            return 5
+        if not quecIot.setLifetime(self.__life_time):
+            return 6
+        if not quecIot.setMcuVersion(self.__fw_name, self.__fw_version):
+            return 7
+        if not quecIot.setConnmode(1):
+            return 8
 
-        Parameter:
-            enforce:
-                True: enfore cloud connect
-                False: check connect status, return True if cloud connected
+        self.__get_device_secret()
+        utime.sleep_ms(200)
+        return self.status
 
-        Return:
-            Ture: Success
-            False: Failed
-        """
-        log.debug(
-            "[init start] enforce: %s QuecThing Work State: %s, quecIot.getConnmode(): %s"
-            % (enforce, quecIot.getWorkState(), quecIot.getConnmode())
-        )
-        log.debug("[init start] PK: %s, PS: %s, DK: %s, DS: %s, SERVER: %s" % (self.__pk, self.__ps, self.__dk, self.__ds, self.__server))
-        if enforce is False:
-            if self.get_status():
-                return True
-
-        self.close()
-        quecIot.init()
-        quecIot.setEventCB(self.__event_cb)
-        quecIot.setProductinfo(self.__pk, self.__ps)
-        if self.__dk or self.__ds:
-            quecIot.setDkDs(self.__dk, self.__ds)
-        quecIot.setServer(self.__mode, self.__server)
-        quecIot.setLifetime(self.__life_time)
-        quecIot.setMcuVersion(self.__mcu_name, self.__mcu_version)
-        quecIot.setConnmode(1)
-
-        count = 0
-        while quecIot.getWorkState() != 8 and count < 10:
-            utime.sleep_ms(200)
-            count += 1
-
-        if not self.__ds and self.__dk:
-            count = 0
-            while count < 3:
-                dkds = quecIot.getDkDs()
-                if dkds:
-                    self.__dk, self.__ds = dkds
-                    log.debug("dk: %s, ds: %s" % dkds)
-                    break
-                count += 1
-                utime.sleep(count)
-
-        log.debug("[init over] QuecThing Work State: %s, quecIot.getConnmode(): %s" % (quecIot.getWorkState(), quecIot.getConnmode()))
-        if self.get_status():
-            return True
-        else:
-            return False
-
-    def close(self):
-        """queccloud disconnect"""
+    def disconnect(self):
         return quecIot.setConnmode(0)
 
-    def get_status(self):
-        """Get quectel cloud connect status
+    def objmodel_report(self, data, qos=2):
+        res = quecIot.phymodelReport(qos, data)
+        return self.__get_report_res(1) if res else False
 
-        Return:
-            True -- connect success
-           False -- connect falied
-        """
-        return True if quecIot.getWorkState() == 8 and quecIot.getConnmode() == 1 else False
-
-    def post_data(self, data):
-        """Publish object model property, event
-
-        Parameter:
-            data format:
-            {
-                "phone_num": "123456789",
-                "energy": 100,
-                "gps": [
-                    "$GNGGA,XXX"
-                    "$GNVTG,XXX"
-                    "$GNRMC,XXX"
-                ],
-            }
-
-        Return:
-            Ture: Success
-            False: Failed
-        """
-        if data.get("gps"):
-            if not quecIot.locReportOutside(data["gps"]):
-                return False
-            if not self.__get_post_res():
-                return False
-            data.pop("gps")
-
-        if data.get("non_gps"):
-            if not quecIot.locReportOutside(data["non_gps"]):
-                return False
-            if not self.__get_post_res():
-                return False
-            data.pop("non_gps")
-
-        if data:
-            om_data = {}
-            for k, v in data.items():
-                _om_data = self.__data_format(k, v)
-                om_data.update(_om_data if _om_data else {})
-            if om_data:
-                if not quecIot.phymodelReport(2, om_data):
-                    return False
-                if not self.__get_post_res():
-                    return False
-            else:
-                return False
-
-        return True
+    def loc_report(self, data, mode="gps"):
+        res = False
+        if mode == "gps":
+            res = quecIot.locReportOutside(data)
+        else:
+            res = quecIot.locReportInside(data)
+        return self.__get_report_res(2) if res else False
 
     def device_report(self):
         return quecIot.devInfoReport([i for i in range(1, 13)])
 
-    def ota_request(self, mp_mode=0):
-        """Publish mcu and firmware ota plain request
+    def ota_search(self, mode=0):
+        return quecIot.otaRequest(mode) if mode in (0, 1) else False
 
-        Return:
-            Ture: Success
-            False: Failed
-        """
-        return quecIot.otaRequest(mp_mode) if mp_mode in (0, 1) else False
-
-    def ota_action(self, action=1, module=None):
-        """Publish ota upgrade start or cancel ota upgrade
-
-        Parameter:
-            action: confirm or cancel upgrade
-                - 0: cancel upgrade
-                - 1: confirm upgrade
-
-            module: useless
-
-        Return:
-            Ture: Success
-            False: Failed
-        """
-        return quecIot.otaAction(action) if action in (0, 1, 2, 3) else False
-
-    def get_device_secret(self):
-        """Get device secret.
-
-        Returns:
-            str: device secret.
-        """
-        return self.__ds
+    def ota_action(self, action=0):
+        return quecIot.otaAction(action) if action in range(4) else False
 
 
-class QuecOTA(object):
+class QuecOTA:
 
     def __init__(self):
         self.__ota_file = "/usr/sotaFile.tar.gz"

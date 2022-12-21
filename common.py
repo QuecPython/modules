@@ -12,26 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import uos
 import _thread
-
-LOWENERGYMAP = {
-    "EC200U": [
-        "POWERDOWN",
-        "PM",
-    ],
-    "EC600N": [
-        "PM",
-    ],
-    "EC800G": [
-        "PM"
-    ],
-}
-
-
-def numiter(num=99999):
-    """Number generation iterator"""
-    return iter(range(num))
 
 
 def option_lock(thread_lock):
@@ -62,12 +43,12 @@ class Singleton(object):
         pass
 
     def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, "_instance"):
+        if not hasattr(cls, "instance_dict"):
             Singleton.instance_dict = {}
 
         if str(cls) not in Singleton.instance_dict.keys():
             with Singleton._instance_lock:
-                _instance = super().__new__(cls)
+                _instance = super().__new__(cls, *args, **kwargs)
                 Singleton.instance_dict[str(cls)] = _instance
 
         return Singleton.instance_dict[str(cls)]
@@ -108,37 +89,17 @@ class Observable(Singleton):
             o.update(self, *args, **kwargs)
 
 
-class CloudObserver(object):
-    """Cloud observer base class"""
-
-    def execute(self, observable, *args, **kwargs):
-        pass
-
-
-class CloudObservable(Singleton):
+class CloudObservable(Observable):
     """Cloud observable base class"""
 
     def __init__(self):
-        self.__observers = []
+        super().__init__()
 
-    def addObserver(self, observer):
-        """Add observer"""
-        self.__observers.append(observer)
-
-    def delObserver(self, observer):
-        """Delete observer"""
-        self.__observers.remove(observer)
-
-    def notifyObservers(self, *args, **kwargs):
-        """Notify observer"""
-        for o in self.__observers:
-            o.execute(self, *args, **kwargs)
-
-    def init(self, enforce=False):
-        """Cloud init"""
+    def connect(self, enforce=False):
+        """Cloud connect"""
         pass
 
-    def close(self):
+    def disconnect(self):
         """Cloud disconnect"""
         pass
 
@@ -152,27 +113,6 @@ class CloudObservable(Singleton):
 
     def ota_action(self, action, module=None):
         """Cloud publish ota upgrade or not request"""
-        pass
-
-
-class CloudObjectModel(Singleton):
-
-    def __init__(self, om_file):
-        self.om_file = om_file
-        if self.__file_exist() is False:
-            raise TypeError("File %s is not exists!" % self.om_file)
-        self.events = type("events", (object,), {})
-        self.properties = type("properties", (object,), {})
-        self.services = type("services", (object,), {})
-
-    def __file_exist(self):
-        try:
-            uos.stat(self.om_file)
-            return True
-        except:
-            return False
-
-    def init(self):
         pass
 
 

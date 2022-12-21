@@ -12,16 +12,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import gc
 import uos
 import usys
-import fota
+try:
+    import fota
+except ImportError:
+    fota = None
 import ujson
 import utime
-import uzlib
+try:
+    import uzlib
+except ImportError:
+    uzlib = None
 import ql_fs
 import _thread
 import osTimer
-import uhashlib
+try:
+    import uhashlib
+except ImportError:
+    uhashlib = None
 import ubinascii
 import app_fota
 import app_fota_download
@@ -31,11 +41,11 @@ from queue import Queue
 from aLiYun import aLiYun
 
 from usr.modules.logging import getLogger
-from usr.modules.common import numiter, option_lock, CloudObservable, CloudObjectModel
+from usr.modules.common import option_lock
 
 log = getLogger(__name__)
 
-_gps_read_lock = _thread.allocate_lock()
+_read_lock = _thread.allocate_lock()
 
 FOTA_ERROR_CODE = {
     1001: "FOTA_DOMAIN_NOT_EXIST",
@@ -55,10 +65,8 @@ FOTA_ERROR_CODE = {
 }
 
 
-class AliObjectModel(CloudObjectModel):
+class AliObjectModel:
     """This class is aliyun object model
-
-    This class extend CloudObjectModel.
 
     Attribute:
         events:
@@ -85,69 +93,51 @@ class AliObjectModel(CloudObjectModel):
     """
 
     def __init__(self, om_file="/usr/aliyun_object_model.json"):
-        super().__init__(om_file)
-        self.init()
-
-    def __init_value(self, om_type):
-        if om_type in ("int", "enum", "date"):
-            om_value = 0
-        elif om_type in ("float", "double"):
-            om_value = 0.0
-        elif om_type == "bool":
-            om_value = True
-        elif om_type == "text":
-            om_value = ""
-        elif om_type == "array":
-            om_value = []
-        elif om_type == "struct":
-            om_value = {}
-        else:
-            om_value = None
-        return om_value
+        self.om_file = om_file
+        if not ql_fs.path_exists(self.om_file):
+            raise TypeError("File %s is not exists!" % self.om_file)
+        self.events = {}
+        self.properties = {}
+        self.services = {}
+        self.__init_object_model()
 
     def __get_property(self, om_item):
-        om_item_key = om_item["identifier"]
-        om_item_type = om_item["dataType"]["type"]
-        om_item_val = self.__init_value(om_item_type)
-        if om_item_type == "struct":
-            om_item_struct = om_item["dataType"]["specs"]
-            om_item_val = {i["identifier"]: self.__init_value(i["dataType"]["type"]) for i in om_item_struct}
-        return om_item_key, om_item_val
+        _key = om_item["identifier"]
+        _type = om_item["dataType"]["type"]
+        _prop = {_key: {"type": _type}}
+        if _type == "struct":
+            _struct = om_item["dataType"]["specs"]
+            _prop[_key]["struct"] = {i["identifier"]: {"type": i["dataType"]["type"]} for i in _struct}
+        return _prop
 
     def __init_properties(self, om_properties):
         for om_property in om_properties:
-            om_property_key, om_property_val = self.__get_property(om_property)
-            setattr(self.properties, om_property_key, {om_property_key: om_property_val})
+            self.properties.update(self.__get_property(om_property))
 
     def __init_events(self, om_events):
         for om_event in om_events:
-            om_event_key = om_event["identifier"]
-            om_event_out_put = om_event.get("outputData", [])
-            om_event_val = {}
-            if om_event_out_put:
-                for om_property in om_event_out_put:
-                    om_property_key, om_property_val = self.__get_property(om_property)
-                    om_event_val[om_property_key] = om_property_val
-            setattr(self.events, om_event_key, {om_event_key: om_event_val})
+            _key = om_event["identifier"]
+            _out_put = om_event.get("outputData", [])
+            self.events[_key] = {
+                "type": om_event["type"],
+            }
+            if _out_put:
+                self.events[_key]["output"] = {}
+                for e in _out_put:
+                    self.events[_key]["output"].update(self.__get_property(e))
 
     def __init_services(self, om_services):
         for om_service in om_services:
-            om_service_key = om_service["identifier"]
-            om_service_out_put = om_service.get("outputData", [])
-            om_service_in_put = om_service.get("inputData", [])
-            om_service_output_val = {}
-            om_service_input_val = {}
-            if om_service_out_put:
-                for om_property in om_service_out_put:
-                    om_property_key, om_property_val = self.__get_property(om_property)
-                    om_service_output_val[om_property_key] = om_property_val
-            if om_service_in_put:
-                for om_property in om_service_in_put:
-                    om_property_key, om_property_val = self.__get_property(om_property)
-                    om_service_input_val[om_property_key] = om_property_val
-            setattr(self.services, om_service_key, {"output": om_service_output_val, "input": om_service_input_val})
+            _key = om_service["identifier"]
+            _out_put = om_service.get("outputData", [])
+            _in_put = om_service.get("inputData", [])
+            self.events[_key] = {}
+            if _out_put:
+                self.events[_key]["output"] = {self.__get_property(om_property) for om_property in _in_put}
+            if _in_put:
+                self.events[_key]["input"] = {self.__get_property(om_property) for om_property in _in_put}
 
-    def init(self):
+    def __init_object_model(self):
         with open(self.om_file, "rb") as f:
             cloud_object_model = ujson.load(f)
             self.__init_properties(cloud_object_model.get("properties", []))
@@ -155,10 +145,8 @@ class AliObjectModel(CloudObjectModel):
             self.__init_services(cloud_object_model.get("services", []))
 
 
-class AliYunIot(CloudObservable):
+class AliYunIot:
     """This is a class for aliyun iot.
-
-    This class extend CloudObservable.
 
     This class has the following functions:
         1. Cloud connect and disconnect
@@ -201,15 +189,11 @@ class AliYunIot(CloudObservable):
 
     def __init__(self, pk, ps, dk, ds, server, client_id, burning_method=0, life_time=120,
                  mcu_name="", mcu_version="", firmware_name="", firmware_version="", reconn=True):
-        """
-        1. Init parent class CloudObservable
-        2. Init cloud connect params and topic
-        """
-        super().__init__()
+        """Init cloud connect params and topic"""
         self.__pk = pk
-        self.__ps = ps
+        self.__ps = None if burning_method == 1 else ps
         self.__dk = dk
-        self.__ds = ds
+        self.__ds = None if burning_method == 0 else ds
         self.__server = server
         self.__burning_method = burning_method
         self.__life_time = life_time
@@ -219,18 +203,20 @@ class AliYunIot(CloudObservable):
         self.__firmware_version = firmware_version
         self.__reconn = reconn
         self.__object_model = None
-        self.__client_id = client_id
+        self.__client_id = client_id if client_id else dk
+        self.__callback = print
 
         self.__ali = None
         self.__post_res = {}
         self.__breack_flag = 0
-        self.__ali_timer = osTimer()
 
-        self.__id_iter = numiter()
         self.__id_lock = _thread.allocate_lock()
+        self.__init_id_iter()
+        self.__init_topic()
 
-        self.__ota = AliOTA(self, self.__mcu_name, self.__firmware_name)
+        # self.__ota = AliOTA(self, self.__mcu_name, self.__firmware_name)
 
+    def __init_topic(self):
         # module object topic
         self.ica_topic_property_post = "/sys/%s/%s/thing/event/property/post" % (self.__pk, self.__dk)
         self.ica_topic_property_post_reply = "/sys/%s/%s/thing/event/property/post_reply" % (self.__pk, self.__dk)
@@ -254,13 +240,16 @@ class AliYunIot(CloudObservable):
         self.rrpc_topic_request = "/sys/%s/%s/rrpc/request/+" % (self.__pk, self.__dk)
         self.rrpc_topic_response = "/sys/%s/%s/rrpc/response/{}" % (self.__pk, self.__dk)
 
+    def __init_id_iter(self):
+        self.__id_iter = iter(range(0xFFFF))
+
     def __get_id(self):
         """Get message id for publishing data"""
         with self.__id_lock:
             try:
                 msg_id = next(self.__id_iter)
             except StopIteration:
-                self.__id_iter = numiter()
+                self.__init_id_iter()
                 msg_id = next(self.__id_iter)
 
         return str(msg_id)
@@ -274,11 +263,7 @@ class AliYunIot(CloudObservable):
         """
         self.__post_res[msg_id] = res
 
-    def __ali_timer_cb(self, args):
-        """osTimer callback to break cycling of get publish result"""
-        self.__breack_flag = 1
-
-    @option_lock(_gps_read_lock)
+    @option_lock(_read_lock)
     def __get_post_res(self, msg_id):
         """Get publish result by message id
 
@@ -289,47 +274,50 @@ class AliYunIot(CloudObservable):
             True: publish success
             False: publish failed
         """
-        self.__ali_timer.start(1000 * 30, 0, self.__ali_timer_cb)
-        while self.__post_res.get(msg_id) is None:
-            if self.__breack_flag:
-                self.__post_res[msg_id] = False
+        count = 0
+        while count < int(30 * 1000 / 50):
+            if self.__post_res.get(msg_id) is not None:
                 break
             utime.sleep_ms(50)
-        self.__ali_timer.stop()
-        self.__breack_flag = 0
+            count += 1
+        if count >= 600 and self.__post_res.get(msg_id) is None:
+            self.__post_res[msg_id] = False
         res = self.__post_res.pop(msg_id)
         return res
 
-    def __subscribe_topic(self, topic, qos=0):
-        subscribe_res = self.__ali.subscribe(topic, qos=0) if self.__ali else -1
-        if subscribe_res == -1:
-            raise TypeError("AliYun subscribe topic %s falied" % topic)
-
-    def __ali_subscribe_topic(self):
+    def __subscribe_topics(self):
         """Subscribe aliyun topic"""
-        try:
-            self.__subscribe_topic(self.ica_topic_property_post)
-            self.__subscribe_topic(self.ica_topic_property_post_reply)
-            self.__subscribe_topic(self.ica_topic_property_set)
-            self.__subscribe_topic(self.ica_topic_service_sub)
-            self.__subscribe_topic(self.ota_topic_device_upgrade)
-            self.__subscribe_topic(self.ota_topic_firmware_get_reply)
-            self.__subscribe_topic(self.rrpc_topic_request)
+        if not self.subscribe_topic(self.ica_topic_property_post):
+            return 1
+        if not self.subscribe_topic(self.ica_topic_property_post_reply):
+            return 2
+        if not self.subscribe_topic(self.ica_topic_property_set):
+            return 3
+        if not self.subscribe_topic(self.ica_topic_service_sub):
+            return 4
+        if not self.subscribe_topic(self.ota_topic_device_upgrade):
+            return 5
+        if not self.subscribe_topic(self.ota_topic_firmware_get_reply):
+            return 6
+        if not self.subscribe_topic(self.rrpc_topic_request):
+            return 7
+        res = 7
+        for tsl_event_identifier in self.__object_model.events.keys():
+            post_topic = self.ica_topic_event_post.format(tsl_event_identifier)
+            res += 1
+            if not self.subscribe_topic(post_topic):
+                return res
+            res += 1
+            post_reply_topic = self.ica_topic_event_post_reply.format(tsl_event_identifier)
+            if not self.subscribe_topic(post_reply_topic):
+                return res
+        # TODO: To Download OTA File For MQTT Association (Not Support Now.)
+        if not self.subscribe_topic(self.ota_topic_file_download_reply):
+            res += 1
+            return res
+        return 0
 
-            for tsl_event_identifier in self.__object_model.events.__dict__.keys():
-                post_topic = self.ica_topic_event_post.format(tsl_event_identifier)
-                self.__subscribe_topic(post_topic)
-                post_reply_topic = self.ica_topic_event_post_reply.format(tsl_event_identifier)
-                self.__subscribe_topic(post_reply_topic)
-
-            # TODO: To Download OTA File For MQTT Association (Not Support Now.)
-            self.__subscribe_topic(self.ota_topic_file_download_reply)
-            return True
-        except Exception as e:
-            usys.print_exception(e)
-            return False
-
-    def __ali_sub_cb(self, topic, data):
+    def __subscribe_callback(self, topic, data):
         """Aliyun subscribe topic callback
 
         Parameter:
@@ -344,39 +332,29 @@ class AliYunIot(CloudObservable):
         log.info("topic: %s, data: %s" % (topic, data))
         if topic.endswith("/post_reply"):
             self.__put_post_res(data["id"], True if data["code"] == 200 else False)
-        elif topic.endswith("/property/set"):
-            if data["method"] == "thing.service.property.set":
-                dl_data = list(zip(data.get("params", {}).keys(), data.get("params", {}).values()))
-                self.notifyObservers(self, *("object_model", dl_data))
-        elif topic.find("/thing/service/") != -1 and not topic.endswith("/property/set"):
-            if data['method'].startswith("thing.service."):
-                service = topic.split("/")[-1]
-                dl_data = [("thing_services", {"data": data, "service": service})]
-                self.notifyObservers(self, *("object_model", dl_data))
         elif topic.startswith("/ota/device/upgrade/"):
             self.__put_post_res(data["id"], True if int(data["code"]) == 1000 else False)
-            if int(data["code"]) == 1000:
-                if data.get("data"):
-                    self.__ota.set_ota_info(data["data"])
-                    self.notifyObservers(self, *("object_model", [("ota_status", (data["data"]["module"], 1, data["data"]["version"]))]))
-                    self.notifyObservers(self, *("ota_plain", [("ota_cfg", data["data"])]))
+            # if int(data["code"]) == 1000:
+            #     if data.get("data"):
+            #         self.__ota.set_ota_info(data["data"])
+            #         ota_info = {
+            #             "code": 1,
+            #             "data": data["data"],
+            #         }
         elif topic.endswith("/thing/ota/firmware/get_reply"):
             self.__put_post_res(data["id"], True if int(data["code"]) == 200 else False)
-            if data["code"] == 200:
-                if data.get("data"):
-                    self.__ota.set_ota_info(data["data"])
-                    self.notifyObservers(self, *("object_model", [("ota_status", (data["data"]["module"], 1, data["data"]["version"]))]))
-                    self.notifyObservers(self, *("ota_plain", [("ota_cfg", data["data"])]))
+            # if data["code"] == 200:
+            #     if data.get("data"):
+            #         self.__ota.set_ota_info(data["data"])
+            #         ota_info = {
+            #             "code": 1,
+            #             "data": data["data"],
+            #         }
         # TODO: To Download OTA File For MQTT Association (Not Support Now.)
         elif topic.endswith("/thing/file/download_reply"):
             self.__put_post_res(data["id"], True if int(data["code"]) == 200 else False)
-            if data["code"] == 200:
-                self.notifyObservers(self, *("ota_file_download", data["data"]))
-        elif topic.find("/rrpc/request/") != -1:
-            message_id = topic.split("/")[-1]
-            self.notifyObservers(self, *("rrpc_request", {"message_id": message_id, "data": data}))
-        else:
-            pass
+
+        self.__callback((topic, data))
 
     def __data_format(self, data):
         """Publish data format by AliObjectModel
@@ -445,31 +423,28 @@ class AliYunIot(CloudObservable):
         service_params = {}
         # Format Publish Params.
         for k, v in data.items():
-            if hasattr(self.__object_model.properties, k):
+            if self.__object_model.properties.get(k):
                 property_params[k] = {
                     "value": v if not isinstance(v, bool) else int(v),
                     "time": utime.mktime(utime.localtime()) * 1000
                 }
-            elif hasattr(self.__object_model.events, k):
+            elif self.__object_model.events.get(k):
                 event_value = {}
                 if v:
                     for v_k, v_v in v.items():
-                        event_item = getattr(self.__object_model.events, k).get(k, {})
+                        event_item = self.__object_model.events[k].get("output", {})
                         if v_k in event_item.keys():
-                            if isinstance(v_v, type(event_item[v_k])):
-                                event_value.update({v_k: v_v})
-                            else:
-                                log.error("Type of %s's value is %s, not %s. So pass." % (type(event_item[v_k]), v_k, type(v_v)))
+                            event_value.update({v_k: v_v})
                         else:
                             log.error("Key %s is not in event %s output. So pass." % (v_k, k))
                 event_params[k] = {
                     "value": event_value,
                     "time": utime.mktime(utime.localtime()) * 1000
                 }
-            elif hasattr(self.__object_model.services, k):
+            elif self.__object_model.services.get(k):
                 service_params[k] = v
             else:
-                log.error("Publish Key [%s] is not in property and event" % k)
+                log.error("Publish Key [%s] is not in property and event and service" % k)
 
         if property_params:
             msg_id = self.__get_id()
@@ -528,79 +503,8 @@ class AliYunIot(CloudObservable):
 
         return res
 
-    def set_object_model(self, object_model):
-        """Register AliObjectModel to this class"""
-        if object_model and isinstance(object_model, AliObjectModel):
-            self.__object_model = object_model
-            return True
-        return False
-
-    def init(self, enforce=False):
-        """Aliyun connect and subscribe topic
-
-        Parameter:
-            enforce:
-                True: enfore cloud connect and subscribe topic
-                False: check connect status, return True if cloud connected
-
-        Return:
-            Ture: Success
-            False: Failed
-        """
-        log.debug("[init start] enforce: %s" % enforce)
-        if enforce is False and self.__ali is not None:
-            log.debug("self.get_status(): %s" % self.get_status())
-            if self.get_status():
-                return True
-
-        if self.__ali is not None:
-            self.close()
-
-        if self.__burning_method == 0:
-            self.__dk = None
-        elif self.__burning_method == 1:
-            self.__ps = None
-
-        log.debug("aLiYun init. self.__pk: %s, self.__ps: %s, self.__dk: %s, self.__ds: %s, self.__server: %s" % (self.__pk, self.__ps, self.__dk, self.__ds, self.__server))
-        self.__ali = aLiYun(self.__pk, self.__ps, self.__dk, self.__ds, self.__server)
-        log.debug("aLiYun setMqtt.")
-        setMqttres = self.__ali.setMqtt(self.__client_id, clean_session=False, keepAlive=self.__life_time, reconn=True)
-        log.debug("aLiYun setMqttres: %s" % setMqttres)
-        if setMqttres != -1:
-            setCallbackres = self.__ali.setCallback(self.__ali_sub_cb)
-            log.debug("aLiYun setCallback: %s" % setCallbackres)
-            subs_res = self.__ali_subscribe_topic()
-            log.debug("aLiYun __ali_subscribe_topic subs_res: %s" % subs_res)
-            if subs_res is True:
-                self.__ali.start()
-                log.debug("aLiYun start.")
-            else:
-                log.error("aLiYun subscribe falied and to disconnect.")
-                self.close()
-                self.__ali = None
-                return False
-        else:
-            log.error("setMqtt falied!")
-            self.close()
-            self.__ali = None
-            return False
-
-        log.debug("self.get_status(): %s" % self.get_status())
-        if self.get_status():
-            return True
-        else:
-            return False
-
-    def close(self):
-        """Aliyun disconnect"""
-        try:
-            self.__ali.disconnect()
-        except Exception as e:
-            usys.print_exception(e)
-            log.error("Ali disconnect falied. %s" % e)
-        return True
-
-    def get_status(self):
+    @property
+    def status(self):
         """Get aliyun connect status
 
         Return:
@@ -608,12 +512,64 @@ class AliYunIot(CloudObservable):
            False -- connect falied
         """
         try:
-            return True if self.__ali.getAliyunSta() == 0 else False
+            _status = self.__ali.getAliyunSta()
+            log.debug("getAliyunSta: %s" % _status)
+            return True if _status == 0 else False
         except Exception as e:
             usys.print_exception(e)
             return False
 
-    def post_data(self, data):
+    def set_object_model(self, object_model):
+        """Register AliObjectModel to this class"""
+        if object_model and isinstance(object_model, AliObjectModel):
+            self.__object_model = object_model
+            return True
+        return False
+
+    def set_callback(self, callback):
+        if callable(callback):
+            self.__callback = callback
+            return True
+        return False
+
+    def subscribe_topic(self, topic, qos=0):
+        subscribe_res = self.__ali.subscribe(topic, qos=qos) if self.__ali else -1
+        log.debug("subscribe_topic %s %s" % (topic, "success" if subscribe_res == 0 else "falied"))
+        return True if subscribe_res == 0 else False
+
+    def connect(self):
+        """Aliyun connect and subscribe topic
+
+        Return:
+            Ture: Success
+            False: Failed
+        """
+        self.__ali = aLiYun(self.__pk, self.__ps, self.__dk, self.__ds, self.__server)
+        _res = self.__ali.setMqtt(self.__client_id, clean_session=False, keepAlive=self.__life_time, reconn=True)
+        if _res == -1:
+            return 1
+        self.__ali.setCallback(self.__subscribe_callback)
+        _res = self.__subscribe_topics()
+        if _res != 0:
+            return 2
+        self.__ali.start()
+        return self.status
+
+    def disconnect(self):
+        """Aliyun disconnect"""
+        try:
+            self.__ali.disconnect()
+        except Exception as e:
+            usys.print_exception(e)
+            log.error("Ali disconnect falied. %s" % e)
+        finally:
+            self.__post_res = {}
+            self.__ali = None
+            gc.collect()
+
+        return True
+
+    def objmodel_report(self, data, qos=0):
         """Publish object model property, event
 
         Parameter:
@@ -637,16 +593,16 @@ class AliYunIot(CloudObservable):
             publish_data = self.__data_format(data)
             # Publish Property Data.
             for item in publish_data["property"]:
-                self.__ali.publish(self.ica_topic_property_post, ujson.dumps(item), qos=0)
+                self.__ali.publish(self.ica_topic_property_post, ujson.dumps(item), qos=qos)
             # Publish Event Data.
             for item in publish_data["event"]:
-                self.__ali.publish(publish_data["event_topic"][item["id"]], ujson.dumps(item), qos=0)
+                self.__ali.publish(publish_data["event_topic"][item["id"]], ujson.dumps(item), qos=qos)
             # Publish Service Data.
             for item in publish_data["service"]:
-                res = self.__ali.publish(publish_data["service_topic"][item["id"]], ujson.dumps(item), qos=0)
+                res = self.__ali.publish(publish_data["service_topic"][item["id"]], ujson.dumps(item), qos=qos)
                 log.debug("message_id: %s, res: %s" % (item["id"], res))
                 self.__put_post_res(item["id"], res)
-
+            # Wait server response.
             pub_res = [self.__get_post_res(msg_id) for msg_id in publish_data["msg_ids"]]
             return True if False not in pub_res else False
         except Exception as e:
@@ -715,10 +671,10 @@ class AliYunIot(CloudObservable):
             return False
 
         if action == 1:
-            # if self.ota_device_progress(step=1, module=module):
-            return self.__ota.start_ota()
+            # return self.__ota.start_ota()
+            return self.ota_device_progress(step=1, module=module)
         else:
-            self.__ota.set_ota_info("", "", [])
+            # self.__ota.set_ota_info("", "", [])
             return self.ota_device_progress(step=-1, desc="User cancels upgrade.", module=module)
 
         return False
@@ -853,14 +809,15 @@ class AliYunIot(CloudObservable):
 
 class AliOTA(object):
 
-    def __init__(self, aliyuniot, mcu_name, firmware_name):
+    def __init__(self, mcu_name=None, firmware_name=None):
         self.__files = []
         self.__module = ""
         self.__version = ""
-        self.__aliyuniot = aliyuniot
+        self.__aliyuniot = None
         self.__mcu_name = mcu_name
         self.__firmware_name = firmware_name
         self.__fota_queue = Queue(maxsize=4)
+        self.__callback = print
 
         self.__file_hash = None
         self.__tar_file = "sotaFile.tar.gz"
@@ -919,14 +876,14 @@ class AliOTA(object):
 
     def __start_fota(self):
         log.debug("AliOTA __start_fota")
-        fota_obj = fota()
+        fota_obj = fota() if fota else None
         url1 = self.__files[0]["url"]
         url2 = self.__files[1]["url"] if len(self.__files) > 1 else ""
         log.debug("AliOTA start httpDownload")
         if url2:
-            res = fota_obj.httpDownload(url1=url1, url2=url2, callback=self.__fota_callback)
+            res = fota_obj.httpDownload(url1=url1, url2=url2, callback=self.__fota_callback) if fota_obj else -1
         else:
-            res = fota_obj.httpDownload(url1=url1, callback=self.__fota_callback)
+            res = fota_obj.httpDownload(url1=url1, callback=self.__fota_callback) if fota_obj else -1
         log.debug("AliOTA httpDownload res: %s" % res)
         if res == 0:
             self.__ota_timer.start(1000 * 3600, 0, self.__ota_timer_callback)
@@ -983,7 +940,7 @@ class AliOTA(object):
         log.debug("AliOTA __download")
         res = app_fota_download.download(url, self.__tar_file)
         if res == 0:
-            self.__file_hash = uhashlib.md5()
+            self.__file_hash = uhashlib.md5() if uhashlib else None
             with open(self.__updater_dir + self.__tar_file, "rb+") as fp:
                 for fpi in fp.readlines():
                     self.__file_hash.update(fpi)
@@ -1007,7 +964,7 @@ class AliOTA(object):
         tar_size = uos.stat(self.__updater_dir + self.__tar_file)[-4]
         with open(self.__updater_dir + self.__tar_file, "rb+") as ota_file:
             ota_file.seek(10)
-            unzipFp = uzlib.DecompIO(ota_file, self.__unzip_size(tar_size), 1)
+            unzipFp = uzlib.DecompIO(ota_file, self.__unzip_size(tar_size), 1) if uzlib else None
             log.debug("[OTA Upgrade] Unzip file success.")
             try:
                 while True:
@@ -1061,7 +1018,20 @@ class AliOTA(object):
 
     def __set_upgrade_status(self, upgrade_status):
         log.debug("__set_upgrade_status upgrade_status %s" % upgrade_status)
-        self.__aliyuniot.notifyObservers(self, *("object_model", [("ota_status", (self.__module, upgrade_status, self.__version))]))
+        self.__callback(("ota_upgrade_status", upgrade_status))
+
+    def set_aliyuniot(self, aliyuniot):
+        if isinstance(aliyuniot, AliYunIot):
+            self.__aliyuniot = aliyuniot
+            return True
+        return False
+
+    def set_firmware(self, mcu_name, firmware_name):
+        if mcu_name and firmware_name:
+            self.__mcu_name = mcu_name
+            self.__firmware_name = firmware_name
+            return True
+        return False
 
     def set_ota_info(self, data):
         """
@@ -1091,6 +1061,12 @@ class AliOTA(object):
             files = [{"size": data["size"], "url": data["url"], "md5": data["md5"], "file_name": name}]
         self.__version = data["version"]
         self.__files = files
+
+    def set_callback(self, callback):
+        if callable(callback):
+            self.__callback = callback
+            return True
+        return False
 
     def start_ota(self):
         log.debug("AliOTA start_ota module %s" % self.__module)
