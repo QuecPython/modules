@@ -190,6 +190,38 @@ class NMEAParse:
     def GxGLLData(self):
         return self.__parse(self.GxGLL)
 
+    @property
+    def Latitude(self):
+        lat = ""
+        _gga = self.GxGGAData
+        if _gga:
+            lat = _gga[2]
+            lat = str(float(lat[:2]) + float(lat[2:]) / 60)
+            lat = ("" if _gga[3] == "N" else "-") + lat
+        return lat
+
+    @property
+    def Longitude(self):
+        lng = ""
+        _gga = self.GxGGAData
+        if _gga:
+            lng = _gga[4]
+            lng = str(float(lng[:3]) + float(lng[3:]) / 60)
+            lng = ("" if _gga[5] == "E" else "-") + lng
+        return lng
+
+    @property
+    def Altitude(self):
+        _gga = self.GxGGAData
+        alt = _gga[9] if _gga else ""
+        return alt
+
+    @property
+    def Speed(self):
+        _vtg = self.GxVTGData
+        speed = _vtg[7] if _vtg else ""
+        return speed
+
 
 class GPSPower:
 
