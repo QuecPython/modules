@@ -46,6 +46,18 @@ res = led.start_flicker(on_period, off_period, count)
 res = led.stop_flicker()
 ```
 
+### 6. 获取LED亮灭状态
+
+```python
+state = led.state
+```
+
+### 7. 获取LED闪烁状态
+
+```python
+flicker_state = led.flicker_state
+```
+
 ## API说明
 
 ### LED
@@ -149,3 +161,33 @@ res = led.stop_flicker()
 |数据类型|说明|
 |:---|---|
 |BOOL|`True`成功, `False`失败|
+
+#### state 获取LED亮灭状态
+
+示例:
+
+```python
+state = led.state
+```
+
+
+返回值:
+
+|数据类型|说明|
+|:---|---|
+|INT|0 - 灭; 1 - 亮|
+
+#### flicker_state 获取LED闪烁状态
+
+示例:
+
+```python
+state = led.flicker_state
+```
+
+
+返回值:
+
+|数据类型|说明|
+|:---|---|
+|INT|0 - 停止闪烁; 1 - 正在闪烁|

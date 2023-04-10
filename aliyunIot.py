@@ -14,27 +14,27 @@
 
 import gc
 import uos
-import usys
+import usys as sys
+import ujson
+import utime
+import ql_fs
+import _thread
+import osTimer
+import ubinascii
+import app_fota
+import app_fota_download
 try:
     import fota
 except ImportError:
     fota = None
-import ujson
-import utime
 try:
     import uzlib
 except ImportError:
     uzlib = None
-import ql_fs
-import _thread
-import osTimer
 try:
     import uhashlib
 except ImportError:
     uhashlib = None
-import ubinascii
-import app_fota
-import app_fota_download
 
 from misc import Power
 from queue import Queue
@@ -516,7 +516,7 @@ class AliYunIot:
             log.debug("getAliyunSta: %s" % _status)
             return True if _status == 0 else False
         except Exception as e:
-            usys.print_exception(e)
+            sys.print_exception(e)
             return False
 
     def set_object_model(self, object_model):
@@ -560,7 +560,7 @@ class AliYunIot:
         try:
             self.__ali.disconnect()
         except Exception as e:
-            usys.print_exception(e)
+            sys.print_exception(e)
             log.error("Ali disconnect falied. %s" % e)
         finally:
             self.__post_res = {}
@@ -606,7 +606,7 @@ class AliYunIot:
             pub_res = [self.__get_post_res(msg_id) for msg_id in publish_data["msg_ids"]]
             return True if False not in pub_res else False
         except Exception as e:
-            usys.print_exception(e)
+            sys.print_exception(e)
             log.error("AliYun publish failed. data: %s" % str(data))
 
         return False
@@ -807,6 +807,301 @@ class AliYunIot:
             return False
 
 
+class AliyunIotNew:
+
+    def __init__(self, product_key=None, device_name=None, device_secret=None, product_secret=None, product_id=None,
+                 server="iot-as-mqtt.cn-shanghai.aliyuncs.com", qos=1):
+        self.__product_key = product_key
+        self.__product_secret = product_secret
+        self.__device_name = device_name
+        self.__device_secret = device_secret
+        self.__product_id = product_id
+        self.__domain = server
+        self.__qos = qos
+        self.__cloud = None
+        self.__id_lock = _thread.allocate_lock()
+        self.__get_post_lock = _thread.allocate_lock()
+        self.__callback = None
+        self.__post_res = {}
+        self.__conn_tag = 0
+        self.__init_id_iter()
+        self.__events = []
+        self.__services = []
+
+    @property
+    def __timestamp(self):
+        return str(utime.mktime(utime.localtime())) + "000"
+
+    def __init_id_iter(self):
+        self.__id_iter = iter(range(0xFFFF))
+
+    @property
+    def __id(self):
+        """Get message id for publishing data"""
+        with self.__id_lock:
+            try:
+                _id = next(self.__id_iter)
+            except StopIteration:
+                self.__init_id_iter()
+                _id = next(self.__id_iter)
+
+        return str(_id)
+
+    def __put_post_res(self, msg_id, res):
+        self.__post_res[msg_id] = res
+
+    def __get_post_res(self, msg_id):
+        with self.__get_post_lock:
+            count = 0
+            while count < int(30 * 1000 / 50):
+                if self.__post_res.get(msg_id) is not None:
+                    break
+                utime.sleep_ms(50)
+                count += 1
+            if count >= 600 and self.__post_res.get(msg_id) is None:
+                self.__post_res[msg_id] = False
+            res = self.__post_res.pop(msg_id)
+            return res
+
+    def __init_topics(self):
+        # module object topic
+        self.ica_topic_property_post = "/sys/%s/%s/thing/event/property/post" % (self.__product_key, self.__device_name)
+        self.ica_topic_property_post_reply = "/sys/%s/%s/thing/event/property/post_reply" % (self.__product_key, self.__device_name)
+        self.ica_topic_property_set = "/sys/%s/%s/thing/service/property/set" % (self.__product_key, self.__device_name)
+        self.ica_topic_property_set_reply = "/sys/%s/%s/thing/service/property/set_reply" % (self.__product_key, self.__device_name)
+        self.ica_topic_event_post = "/sys/%s/%s/thing/event/{}/post" % (self.__product_key, self.__device_name)
+        self.ica_topic_event_post_reply = "/sys/%s/%s/thing/event/{}/post_reply" % (self.__product_key, self.__device_name)
+        self.ica_topic_service_sub = "/sys/%s/%s/thing/service/{}" % (self.__product_key, self.__device_name)
+        self.ica_topic_service_pub_reply = "/sys/%s/%s/thing/service/{}_reply" % (self.__product_key, self.__device_name)
+        # OTA topic
+        self.ota_topic_device_inform = "/ota/device/inform/%s/%s" % (self.__product_key, self.__device_name)
+        self.ota_topic_device_upgrade = "/ota/device/upgrade/%s/%s" % (self.__product_key, self.__device_name)
+        self.ota_topic_device_progress = "/ota/device/progress/%s/%s" % (self.__product_key, self.__device_name)
+        self.ota_topic_firmware_get = "/sys/%s/%s/thing/ota/firmware/get" % (self.__product_key, self.__device_name)
+        self.ota_topic_firmware_get_reply = "/sys/%s/%s/thing/ota/firmware/get_reply" % (self.__product_key, self.__device_name)
+        # RRPC topic
+        self.rrpc_topic_request = "/sys/%s/%s/rrpc/request/+" % (self.__product_key, self.__device_name)
+        self.rrpc_topic_response = "/sys/%s/%s/rrpc/response/{}" % (self.__product_key, self.__device_name)
+
+    def __subscribe_callback(self, topic, data):
+        topic = topic.decode()
+        try:
+            data = ujson.loads(data)
+        except:
+            pass
+        log.debug("topic: %s, data: %s" % (topic, str(data)))
+
+        if topic.endswith("/post_reply"):
+            self.__put_post_res(data["id"], True if int(data["code"]) == 200 else False)
+            return
+        elif topic.endswith("/thing/ota/firmware/get_reply"):
+            self.__put_post_res(data["id"], True if int(data["code"]) == 200 else False)
+
+        if self.__callback and callable(self.__callback):
+            self.__callback((topic, data))
+
+    def __subscribe_topic(self, topic):
+        subscribe_res = self.__cloud.subscribe(topic, qos=self.__qos) if self.__cloud else -1
+        log.debug("subscribe_topic %s %s" % (topic, "success" if subscribe_res == 0 else "falied"))
+        return True if subscribe_res == 0 else False
+
+    def __subscribe_topics(self):
+        self.__init_topics()
+        res = 0
+        if not self.__subscribe_topic(self.ica_topic_property_post_reply):
+            res = 1
+        if not self.__subscribe_topic(self.ica_topic_property_set):
+            res = 2
+        if not self.__subscribe_topic(self.ota_topic_device_upgrade):
+            res = 3
+        if not self.__subscribe_topic(self.ota_topic_firmware_get_reply):
+            res = 4
+        if not self.__subscribe_topic(self.rrpc_topic_request):
+            res = 5
+        res = 5
+        for event in self.__events:
+            if not self.__subscribe_topic(self.ica_topic_event_post_reply.format(event)):
+                res += 1
+                break
+        if res != 5:
+            return res
+        res = 5 + len(self.__events)
+        for service in self.__services:
+            if not self.__subscribe_topic(self.ica_topic_service_sub.format(service)):
+                res += 1
+                break
+        if res == 5 + len(self.__events):
+            res = 0
+        return res
+
+    @property
+    def status(self):
+        try:
+            _status = self.__cloud.getAliyunSta() if self.__cloud else -1
+            log.debug("getAliyunSta: %s" % _status)
+            return True if _status == 0 else False
+        except Exception as e:
+            sys.print_exception(e)
+            log.error(str(e))
+            return False
+
+    @property
+    def auth_info(self):
+        return {
+            "product_key": self.__product_key,
+            "product_secret": self.__product_secret,
+            "device_name": self.__device_name,
+            "device_secret": self.__device_secret
+        }
+
+    def add_event(self, event):
+        if event not in self.__events:
+            self.__events.append(event)
+            return True
+        return False
+
+    def add_service(self, service):
+        if service not in self.__services:
+            self.__services.append(service)
+            return True
+        return False
+
+    def set_callback(self, callback):
+        self.__callback = callback
+
+    def connect(self):
+        res = -1
+        self.__server = "%s.%s" % (self.__product_key, self.__domain)
+        log.debug("self.__product_key: %s" % self.__product_key)
+        log.debug("self.__product_secret: %s" % self.__product_secret)
+        log.debug("self.__device_name: %s" % self.__device_name)
+        log.debug("self.__device_secret: %s" % self.__device_secret)
+        log.debug("self.__server: %s" % self.__server)
+        self.__cloud = aLiYun(self.__product_key, self.__product_secret, self.__device_name, self.__device_secret, self.__server)
+        res = self.__cloud.setMqtt(self.__device_name)
+        if res == 0:
+            self.__cloud.setCallback(self.__subscribe_callback)
+            res = self.__subscribe_topics()
+            if res == 0:
+                self.__cloud.start()
+        return res
+
+    def disconnect(self):
+        """Aliyun disconnect"""
+        try:
+            if self.__cloud:
+                self.__cloud.disconnect()
+        except Exception as e:
+            sys.print_exception(e)
+            log.error("Ali disconnect falied. %s" % e)
+        finally:
+            self.__cloud = None
+        return True
+
+    def properties_report(self, data):
+        _timestamp = self.__timestamp
+        _id = self.__id
+        params = {key: {"value": val, "time": _timestamp} for key, val in data.items()}
+        properties = {
+            "id": _id,
+            "version": "1.0",
+            "sys": {
+                "ack": 1
+            },
+            "params": params,
+            "method": "thing.event.property.post",
+        }
+        pub_res = self.__cloud.publish(self.ica_topic_property_post, ujson.dumps(properties), qos=self.__qos) if self.__cloud else -1
+        return self.__get_post_res(_id) if pub_res is True else False
+
+    def event_report(self, event, data):
+        _timestamp = self.__timestamp
+        _id = self.__id
+        params = {"value": data, "time": _timestamp}
+        properties = {
+            "id": _id,
+            "version": "1.0",
+            "sys": {
+                "ack": 1
+            },
+            "params": params,
+            "method": "thing.event.%s.post" % event,
+        }
+        pub_res = self.__cloud.publish(self.ica_topic_event_post.format(event), ujson.dumps(properties), qos=self.__qos) if self.__cloud else -1
+        return self.__get_post_res(_id) if pub_res is True else False
+
+    def service_response(self, service, code, data, msg_id, message):
+        pub_data = {
+            "code": code,
+            "data": data,
+            "id": msg_id,
+            "message": message,
+            "version": "1.0",
+        }
+        return self.__cloud.publish(self.ica_topic_service_pub_reply.format(service), ujson.dumps(pub_data), qos=self.__qos) if self.__cloud else False
+
+    def rrpc_response(self, msg_id, data):
+        """Publish rrpc response
+
+        Parameter:
+            msg_id: rrpc request messasge id
+            data: response message
+
+        Return:
+            Ture: Success
+            False: Failed
+        """
+        pub_data = ujson.dumps(data) if isinstance(data, dict) else data
+        return self.__cloud.publish(self.rrpc_topic_response.format(msg_id), pub_data, qos=self.__qos) if self.__cloud else False
+
+    def property_set_reply(self, mid, code, msg):
+        data = {
+            "code": code,
+            "data": {},
+            "id": mid,
+            "message": msg,
+            "version": "1.0"
+        }
+        return self.__cloud.publish(self.ica_topic_property_set_reply, ujson.dumps(data), qos=self.__qos) if self.__cloud else False
+
+    def ota_device_inform(self, version, module):
+        _id = self.__id
+        publish_data = {
+            "id": _id,
+            "params": {
+                "version": version,
+                "module": module
+            }
+        }
+        return self.__cloud.publish(self.ota_topic_device_inform, ujson.dumps(publish_data), qos=self.__qos) if self.__cloud else False
+
+    def ota_firmware_get(self, module):
+        _id = self.__id
+        publish_data = {
+            "id": _id,
+            "version": "1.0",
+            "params": {
+                "module": module,
+            },
+            "method": "thing.ota.firmware.get"
+        }
+        publish_res = self.__cloud.publish(self.ota_topic_firmware_get, ujson.dumps(publish_data), qos=self.__qos) if self.__cloud else False
+        log.debug("module: %s, publish_res: %s" % (module, publish_res))
+        return self.__get_post_res(_id) if publish_res else False
+
+    def ota_device_progress(self, step, desc, module):
+        _id = self.__id
+        publish_data = {
+            "id": _id,
+            "params": {
+                "step": step,
+                "desc": desc,
+                "module": module,
+            }
+        }
+        return self.__cloud.publish(self.ota_topic_device_progress, ujson.dumps(publish_data), qos=self.__qos) if self.__cloud else False
+
+
 class AliOTA(object):
 
     def __init__(self, mcu_name=None, firmware_name=None):
@@ -1000,7 +1295,7 @@ class AliOTA(object):
                 uos.remove(self.__updater_dir + self.__tar_file)
                 app_fota_download.delete_update_file(self.__tar_file)
             except Exception as e:
-                usys.print_exception(e)
+                sys.print_exception(e)
                 err_msg = "Unpack Error: %s" % e
                 self.__aliyuniot.ota_device_progress(-4, err_msg, module=self.__module)
 

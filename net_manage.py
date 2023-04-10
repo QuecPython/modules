@@ -24,11 +24,11 @@
 @copyright :Copyright (c) 2022
 """
 import net
-import usys
 import utime
 import ntptime
 import dataCall
 import checkNet
+import usys as sys
 
 
 class NetManage:
@@ -42,9 +42,14 @@ class NetManage:
         res = False
         try:
             data_call_info = dataCall.getInfo(1, 0)
-            res = True if isinstance(data_call_info, tuple) and data_call_info[2][0] == 1 else False
+            net_state = net.getState()
+            if isinstance(data_call_info, tuple) and data_call_info[2][0] == 1 and \
+                    isinstance(net_state, tuple) and len(net_state) >= 2 and net_state[1][0] in (1, 5):
+                res = True
+            else:
+                res = False
         except Exception as e:
-            usys.print_exception(e)
+            sys.print_exception(e)
         return res
 
     def wait_connect(self, timeout=60):
@@ -66,5 +71,11 @@ class NetManage:
             return self.connect()
         return False
 
-    def sync_time(self):
-        return True if self.status and ntptime.settime() == 0 else False
+    def sync_time(self, timezone=8):
+        return True if self.status and ntptime.settime(timezone) == 0 else False
+
+    def set_callback(self, callback):
+        if callable(callback):
+            res = dataCall.setCallback(callback)
+            return True if res == 0 else False
+        return False

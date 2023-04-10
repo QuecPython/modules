@@ -12,56 +12,123 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+@file      :led.py
+@author    :Jack Sun (jack.sun@quectel.com)
+@brief     :LED manage.
+@version   :1.0.0
+@date      :2022-11-24 17:06:30
+@copyright :Copyright (c) 2022
+"""
 import utime
 import _thread
-import osTimer
+import usys as sys
 from machine import Pin
-from usr.modules.logging import getLogger
-
-log = getLogger(__name__)
 
 
-class LED(object):
+class LED:
     """This class is for control LED"""
 
-    def __init__(self, GPIOn, direction=Pin.OUT, pullMode=Pin.PULL_DISABLE, level=0):
-        """LED object init
-
-        Args:
-            GPIOn: pin number
-            direction: IN - input mode, OUT - output mode
-            pullMode: PULL_DISABLE - float mode, PULL_PU - pull-up mode, PULL_PD - pull-down mode
-            level: 0 - set the pin to low level, 1- set the pin to high level
-        """
-        self.__led = Pin(GPIOn, direction, pullMode, level)
+    def __init__(self):
+        """LED object init"""
+        self.__leds = []
         self.__period = 0
         self.__count = 0
-        self.__runc = 0
         self.__on_period = 0
         self.__off_period = 5
-        self.__led_timer = osTimer()
-        self.__led_lock = _thread.allocate_lock()
+        self.__led_thread_id = None
+        self.__flicker_stop = 0
+
+    def __write(self, val):
+        """Set led pin level
+
+        Args:
+            val (int): 0 - low level, 1 - high level.
+
+        Returns:
+            bool: True - success, False - Failed.
+        """
+        res = []
+        for led in self.__leds:
+            if led.get_dir() != 1:
+                led.set_dir(Pin.OUT)
+            res.append(led.write(val))
+        res = tuple(set(res))
+        return True if len(res) == 1 and res[0] == 0 else False
+
+    @property
+    def state(self):
+        """Read LED now state
+
+        Returns:
+            int: 0 - low level, 1 - high level.
+        """
+        states = tuple(set([led.read() for led in self.__leds]))
+        return 1 if len(states) == 1 and states[0] == 1 else 0
+
+    def add_gpio(self, gpio):
+        """Add control led gpio.
+
+        Args:
+            gpio (object): Pin.GPIO object.
+
+        Returns:
+            bool: True - success, False - Failed.
+        """
+        if isinstance(gpio, Pin):
+            if gpio not in self.__leds:
+                self.__leds.append(gpio)
+            return True
+        return False
+
+    def get_gpio(self):
+        """Get this led gpios
+
+        Returns:
+            list: GPIO object list.
+        """
+        return self.__leds
 
     def on(self):
-        """Set led on"""
-        self.__led.write(1)
+        """Set led on
+
+        Returns:
+            bool: True - Success, False - Failed.
+        """
+        return self.__write(1)
 
     def off(self):
-        """Set led off"""
-        self.__led.write(0)
+        """Set led off
 
-    def __led_timer_cb(self, args):
-        """LED flicker timer."""
-        if self.__count > 0:
-            self.__runc += 1
-            if self.__runc > self.__count:
-                self.__runc = 0
-                self.stop_flicker()
-                return
-        self.on()
-        utime.sleep_ms(self.__on_period)
+        Returns:
+            bool: True - Success, False - Failed.
+        """
+        return self.__write(0)
+
+    def __led_flicker_running(self, on_period, off_period, count):
+        """This function is for led filcker threadn.
+
+        Args:
+            on_period (int): LED on time.
+            off_period (int): LED off time.
+            count (int): LED flicker times.
+        """
         self.off()
-        self.__led_timer.start(self.__off_period, 0, self.__led_timer_cb)
+        count = count * 2
+        runc = count
+        while True:
+            if self.state == 0:
+                self.on()
+                utime.sleep_ms(on_period)
+            else:
+                self.off()
+                utime.sleep_ms(off_period)
+            if count > 0:
+                runc -= 1
+                if runc == 0:
+                    break
+            if self.__flicker_stop == 1:
+                break
 
     def start_flicker(self, on_period, off_period, count=0):
         """Start led flicker
@@ -72,22 +139,32 @@ class LED(object):
             count(int): flicker times, if count is 0, filcker forever. (default: {0})
 
         Returns:
-            bool: True -- success; False -- falied.
+            bool: True - success; False - falied.
         """
         self.__on_period = on_period
         self.__off_period = off_period
-        self.__count = count
-        if self.__count >= 0 and self.__on_period > 0 and self.__off_period >= 5:
+        self.__count = count * 2
+        if self.__count >= 0 and self.__on_period >= 5 and self.__off_period >= 5:
             self.stop_flicker()
-            if self.__led_timer.start(self.__off_period, 0, self.__led_timer_cb) == 0:
-                return True
-
+            self.__flicker_stop = 0
+            try:
+                _thread.stack_size(0x800)
+                self.__led_thread_id = _thread.start_new_thread(self.__led_flicker_running, (on_period, off_period, count))
+            except Exception as e:
+                sys.print_exception(e)
         return False
 
     def stop_flicker(self):
         """Stop LED flicker
 
         Returns:
-            bool: True -- success; False -- falied.
+            bool: True - success; False - falied.
         """
-        return True if self.__led_timer.stop() == 0 else False
+        self.__flicker_stop = 1
+        if self.__led_thread_id is not None and _thread.threadIsRunning(self.__led_thread_id):
+            try:
+                _thread.stop_thread(self.__led_thread_id)
+            except Exception as e:
+                sys.print_exception(e)
+        self.__led_thread_id = None
+        return self.off()
