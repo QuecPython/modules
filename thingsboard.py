@@ -18,7 +18,7 @@
 """
 @file      :thingsboard.py
 @author    :Jack Sun (jack.sun@quectel.com)
-@brief     :<description>
+@brief     :ThingsBoard cloud mqtt client.
 @version   :1.0.0
 @date      :2022-09-14 11:04:03
 @copyright :Copyright (c) 2022
@@ -40,12 +40,12 @@ RPC_REQUEST_TOPIC = 'v1/devices/me/rpc/request/'
 
 class TBDeviceMQTTClient:
 
-    def __init__(self, host, port=1883, username=None, password="", quality_of_service=0, client_id="", chunk_size=0):
+    def __init__(self, host, port=1883, username=None, password="", qos=0, client_id="", chunk_size=0):
         self.__host = host
         self.__port = port
         self.__username = username
         self.__password = password
-        self.__quality_of_service = quality_of_service
+        self.__qos = qos
         self.__client_id = client_id
         self.__chunk_size = chunk_size
         self.__mqtt = None
@@ -95,7 +95,7 @@ class TBDeviceMQTTClient:
             self.__mqtt.set_callback(self.__callback)
             if self.__mqtt.connect(clean_session=clean_session) == 0:
                 self.__status = True
-                self.__mqtt.subscribe(RPC_REQUEST_TOPIC + "+", self.__quality_of_service)
+                self.__mqtt.subscribe(RPC_REQUEST_TOPIC + "+", self.__qos)
                 self.__start_wait_msg()
                 return True
         except Exception as e:
@@ -117,7 +117,7 @@ class TBDeviceMQTTClient:
 
     def send_telemetry(self, data):
         try:
-            self.__mqtt.publish(TELEMETRY_TOPIC, ujson.dumps(data), qos=self.__quality_of_service)
+            self.__mqtt.publish(TELEMETRY_TOPIC, ujson.dumps(data), qos=self.__qos)
             return True
         except Exception as e:
             usys.print_exception(e)
@@ -125,7 +125,7 @@ class TBDeviceMQTTClient:
 
     def send_rpc_reply(self, data, request_id):
         try:
-            self.__mqtt.publish(RPC_RESPONSE_TOPIC + request_id, ujson.dumps(data), qos=self.__quality_of_service)
+            self.__mqtt.publish(RPC_RESPONSE_TOPIC + request_id, ujson.dumps(data), qos=self.__qos)
             return True
         except Exception as e:
             usys.print_exception(e)

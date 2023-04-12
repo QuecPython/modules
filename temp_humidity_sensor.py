@@ -17,9 +17,9 @@
 
 """
 @file      :temp_humidity_sensor.py
-@author    :elian.wang@quectel.com
+@author    :Jack Sun (jack.sun@quectel.com)
 @brief     :Show tempurature and humidity sensor TH20 usage
-@version   :0.1
+@version   :1.0.1
 @date      :2022-05-20 11:14:24
 @copyright :Copyright (c) 2022
 """

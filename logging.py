@@ -12,6 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+@file      :logging.py
+@author    :Jack Sun (jack.sun@quectel.com)
+@brief     :Log management.
+@version   :1.0.2
+@date      :2022-11-24 17:06:30
+@copyright :Copyright (c) 2022
+"""
+
 import uos
 import utime
 import ql_fs
@@ -44,8 +53,12 @@ class Logger:
         self.__name = name
 
     def __save_log(self, msg):
-        global _log_path
-        global _log_file
+        """Save log message to local file.
+
+        Args:
+            msg (str): log message.
+        """
+        global _log_path, _log_file
         try:
             log_size = 0
             if not ql_fs.path_exists(_log_path):
@@ -67,6 +80,12 @@ class Logger:
             sys.print_exception(e)
 
     def __log(self, level, *message):
+        """Show log message to screen.
+
+        Args:
+            level (str): level name.
+            message (tuple): message items.
+        """
         global _log_save
         with _LOG_LOCK:
             if _log_debug is False:
@@ -83,44 +102,91 @@ class Logger:
                 self.__save_log(msg)
 
     def critical(self, *message):
+        """Show critical level log.
+
+        Args:
+            message (tuple): message items.
+        """
         self.__log("critical", *message)
 
     def error(self, *message):
+        """Show error level log.
+
+        Args:
+            message (tuple): message items.
+        """
         self.__log("error", *message)
 
     def warn(self, *message):
+        """Show warn level log.
+
+        Args:
+            message (tuple): message items.
+        """
         self.__log("warn", *message)
 
     def info(self, *message):
+        """Show info level log.
+
+        Args:
+            message (tuple): message items.
+        """
         self.__log("info", *message)
 
     def debug(self, *message):
+        """Show debug level log.
+
+        Args:
+            message (tuple): message items.
+        """
         self.__log("debug", *message)
 
 
 def getLogger(name):
+    """Get Logger object by name.
+
+    Args:
+        name (str): log object name, default use file name.
+
+    Returns:
+        object: Logger object.
+    """
     global _log_dict
     if not _log_dict.get(name):
         _log_dict[name] = Logger(name)
     return _log_dict[name]
 
 
-def setLogFile(path, name):
-    global _log_path
-    global _log_name
-    global _log_file
+def setLogSave(save, path, name, size=None, backups=None):
+    """Set project log save onff, file size, backup file counts.
+
+    [description]
+
+    Args:
+        save (bool): True - save log to file, False - not save log to file.
+        path (str): Log file path.
+        name (str): Log file name.
+        size (int): Log file max size. (default: `None`)
+        backups (int): Log file max backup count. (default: `None`)
+
+    Returns:
+        tuple: set result.
+            (result code, result message)
+            result code:
+                0 - success.
+                1 - save args error.
+                2 - size args error.
+                3 - backups args error.
+            result message:
+                error message.
+    """
+    global _log_save, _log_path, _log_name, _log_file, _log_size, _log_back
     if not path.endswith("/"):
         path += "/"
     _log_path = path
     _log_name = name
     _log_file = _log_path + _log_name
-    return 0
 
-
-def setSaveLog(save, size=None, backups=None):
-    global _log_save
-    global _log_size
-    global _log_back
     if not isinstance(save, bool):
         return (1, "save is not bool.")
     _log_save = save
@@ -135,6 +201,14 @@ def setSaveLog(save, size=None, backups=None):
 
 
 def setLogLevel(level):
+    """Set project log level.
+
+    Args:
+        level (str): Log level.
+
+    Returns:
+        bool: True - success, False - failed.
+    """
     global _log_level
     level = level.lower()
     if level not in _LOG_LEVEL_CODE.keys():
@@ -144,6 +218,14 @@ def setLogLevel(level):
 
 
 def setLogDebug(debug):
+    """Set project log debug.
+
+    Args:
+        debug (bool): Log debug.
+
+    Returns:
+        bool: True - success, False - failed.
+    """
     global _log_debug
     if isinstance(debug, bool):
         _log_debug = debug

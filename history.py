@@ -12,17 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+@file      :history.py
+@author    :Jack Sun (jack.sun@quectel.com)
+@brief     :History management.
+@version   :1.0.2
+@date      :2022-11-24 17:06:30
+@copyright :Copyright (c) 2022
+"""
+
 import uos
 import ql_fs
 import ujson
 import _thread
 
-from usr.modules.common import Singleton, option_lock
 
-_history_lock = _thread.allocate_lock()
-
-
-class History(Singleton):
+class History:
     """This class is for manage history file."""
 
     def __init__(self, history_file="/usr/tracker_data.hist", max_hist_num=100):
@@ -33,19 +38,17 @@ class History(Singleton):
         """
         self.__history = history_file
         self.__max_hist_num = max_hist_num
+        self.__history_lock = _thread.allocate_lock()
 
     def __read(self):
-        """Read history file info
+        """Read history file info.
 
-        Return:
-            data format:
-            {
-                "data": [
-                    {
-                        "xxx": "wwww"
-                    }
-                ]
-            }
+        Returns:
+            dict: history data list.
+                data format:
+                {
+                    "data": [xxx, xxx, xxx]
+                }
         """
         res = {"data": []}
         if ql_fs.path_exists(self.__history):
@@ -61,19 +64,15 @@ class History(Singleton):
     def __write(self, data):
         """Write data to history file
 
-        Parameter:
-        data format:
-            {
-                "data": [
-                    {
-                        "xxx": "wwww"
-                    }
-                ]
-            }
+        Args:
+            data (dict): history data.
+                data format:
+                {
+                    "data": [xxx, xxx, xxx]
+                }
 
-        Return:
-            True: Success
-            False: Falied
+        Returns:
+            bool: True - success, False - faliled.
         """
         try:
             with open(self.__history, "w") as f:
@@ -82,60 +81,46 @@ class History(Singleton):
         except:
             return False
 
-    @option_lock(_history_lock)
     def read(self):
         """Read history info
 
         Return:
-            data format:
-            {
-                "data": [
-                    {
-                        "switch": True,
-                        "energy": 100,
-                        "gps": ["$GPRMCx,x,x,x", "$GPGGAx,x,x,x"],
-                    },
-                    {
-                        "switch": True,
-                        "energy": 100,
-                        "non_gps": ["LBS"],
-                    },
-                ],
-            }
+            data (dict): history data.
+                data format:
+                {
+                    "data": [xxx, xxx, xxx]
+                }
         """
-        res = self.__read()
-        self.__write({"data": []})
-        return res
+        with self.__history_lock:
+            res = self.__read()
+            self.__write({"data": []})
+            return res
 
-    @option_lock(_history_lock)
     def write(self, data):
-        """
-        Data Format For Write History:
+        """Data format for write history
 
-        [
-            {
-                "switch": True,
-                "energy": 100,
-                "gps": ["$GPRMCx,x,x,x", "$GPGGAx,x,x,x"],
-            },
-            {
-                "switch": True,
-                "energy": 100,
-                "non_gps": ["LBS"],
-            },
-        ]
-        """
-        res = self.__read()
-        res["data"].extend(data)
-        if len(res["data"]) > self.__max_hist_num:
-            res["data"] = res["data"][self.__max_hist_num * -1:]
-        return self.__write(res)
+        Args:
+            data (list): history data list.
 
-    @option_lock(_history_lock)
+        Returns:
+            bool: True - success, False - faliled.
+        """
+        with self.__history_lock:
+            res = self.__read()
+            res["data"].extend(data)
+            if len(res["data"]) > self.__max_hist_num:
+                res["data"] = res["data"][self.__max_hist_num * -1:]
+            return self.__write(res)
+
     def clean(self):
-        """Remove history file."""
-        try:
-            uos.remove(self.__history)
-            return True
-        except:
-            return False
+        """Remove history file.
+
+        Returns:
+            bool: True - success, False - faliled.
+        """
+        with self.__history_lock:
+            try:
+                uos.remove(self.__history)
+                return True
+            except:
+                return False

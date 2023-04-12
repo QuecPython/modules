@@ -12,7 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+@file      :common.py
+@author    :Jack Sun (jack.sun@quectel.com)
+@brief     :Common modules.
+@version   :1.0.2
+@date      :2022-11-24 17:06:30
+@copyright :Copyright (c) 2022
+"""
+
+import utime
 import _thread
+import usys as sys
+from machine import Pin
 
 
 def option_lock(thread_lock):
@@ -23,16 +35,6 @@ def option_lock(thread_lock):
                 return func(*args, **kwargs)
         return wrapperd_fun
     return function_lock
-
-
-class BaseError(Exception):
-    """Exception base class"""
-
-    def __init__(self, value):
-        self.value = value
-
-    def __str__(self):
-        return repr(self.value)
 
 
 class Singleton(object):
@@ -54,67 +56,149 @@ class Singleton(object):
         return Singleton.instance_dict[str(cls)]
 
 
-class Observer(object):
-    """Observer base class"""
+class GPIOCtrl:
+    """This class is for gpio control.
 
-    def update(self, observable, *args, **kwargs):
-        pass
-
-
-class Observable(Singleton):
-    """Observable base class"""
+    This is a base class for LED, Buzzer.
+    """
 
     def __init__(self):
-        self.__observers = []
+        """GPIO control object init"""
+        self.__gpios = []
+        self.__period = 0
+        self.__count = 0
+        self.__on_period = 5
+        self.__off_period = 5
+        self.__thread_id = None
+        self.__flicker_stop = 0
+        self.__onoff_lock = _thread.allocate_lock()
 
-    def addObserver(self, observer):
-        """Add observer"""
-        try:
-            self.__observers.append(observer)
+    def __write(self, val):
+        """Set gpio level
+
+        Args:
+            val (int): 0 - low level, 1 - high level.
+
+        Returns:
+            bool: True - success, False - Failed.
+        """
+        with self.__onoff_lock:
+            res = []
+            for i in self.__gpios:
+                if i.get_dir() != 1:
+                    i.set_dir(Pin.OUT)
+                res.append(i.write(val))
+            res = tuple(set(res))
+            return True if len(res) == 1 and res[0] == 0 else False
+
+    def __flicker_running(self, on_period, off_period, count):
+        """This function is for led filcker threadn.
+
+        Args:
+            on_period (int): LED on time.
+            off_period (int): LED off time.
+            count (int): LED flicker times.
+        """
+        count = count * 2
+        runc = count
+        while True:
+            if self.state == 0:
+                self.on()
+                utime.sleep_ms(on_period)
+            else:
+                self.off()
+                utime.sleep_ms(off_period)
+            if count > 0:
+                runc -= 1
+                if runc == 0:
+                    break
+            if self.__flicker_stop == 1:
+                break
+
+    @property
+    def state(self):
+        """Read gpio now state
+
+        Returns:
+            int: 0 - low level, 1 - high level.
+        """
+        states = tuple(set([i.read() for i in self.__gpios]))
+        return 1 if len(states) == 1 and states[0] == 1 else 0
+
+    def add_gpio(self, gpio):
+        """Add control gpio.
+
+        Args:
+            gpio (object): Pin.GPIO object.
+
+        Returns:
+            bool: True - success, False - Failed.
+        """
+        if isinstance(gpio, Pin):
+            if gpio not in self.__gpios:
+                self.__gpios.append(gpio)
             return True
-        except:
-            return False
+        return False
 
-    def delObserver(self, observer):
-        """Delete observer"""
-        try:
-            self.__observers.remove(observer)
-            return True
-        except:
-            return False
+    def get_gpio(self):
+        """Get this object gpios
 
-    def notifyObservers(self, *args, **kwargs):
-        """Notify observer"""
-        for o in self.__observers:
-            o.update(self, *args, **kwargs)
+        Returns:
+            list: GPIO object list.
+        """
+        return self.__gpios
 
+    def on(self):
+        """Set gpio high level.
 
-class CloudObservable(Observable):
-    """Cloud observable base class"""
+        Returns:
+            bool: True - Success, False - Failed.
+        """
+        return self.__write(1)
 
-    def __init__(self):
-        super().__init__()
+    def off(self):
+        """Set gpio low level.
 
-    def connect(self, enforce=False):
-        """Cloud connect"""
-        pass
+        Returns:
+            bool: True - Success, False - Failed.
+        """
+        return self.__write(0)
 
-    def disconnect(self):
-        """Cloud disconnect"""
-        pass
+    def start_flicker(self, on_period, off_period, count=0):
+        """Start gpio level cyclical change.
 
-    def post_data(self, data):
-        """Cloud publish data"""
-        pass
+        Args:
+            on_period(int): gpio high level time, unit: ms
+            off_period(int): gpio low level time, unit: ms
+            count(int): flicker times, if count is 0, filcker forever. (default: {0})
 
-    def ota_request(self, *args, **kwargs):
-        """Cloud publish ota plain request"""
-        pass
+        Returns:
+            bool: True - success; False - falied.
+        """
+        self.__on_period = on_period
+        self.__off_period = off_period
+        self.__count = count * 2
+        if self.__count >= 0 and self.__on_period >= 5 and self.__off_period >= 5:
+            self.stop_flicker()
+            self.__flicker_stop = 0
+            try:
+                _thread.stack_size(0x800)
+                self.__thread_id = _thread.start_new_thread(self.__flicker_running, (on_period, off_period, count))
+            except Exception as e:
+                sys.print_exception(e)
+        return False
 
-    def ota_action(self, action, module=None):
-        """Cloud publish ota upgrade or not request"""
-        pass
+    def stop_flicker(self):
+        """Stop gpio level cyclical change.
 
-
-class DeviceDriversMeta(object):
-    pass
+        Returns:
+            bool: True - success; False - falied.
+        """
+        self.__flicker_stop = 1
+        if self.__thread_id is not None and _thread.threadIsRunning(self.__thread_id):
+            try:
+                _thread.stop_thread(self.__thread_id)
+            except Exception as e:
+                sys.print_exception(e)
+        self.__thread_id = None
+        return self.off()

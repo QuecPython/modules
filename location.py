@@ -12,39 +12,34 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+@file      :location.py
+@author    :Jack Sun (jack.sun@quectel.com)
+@brief     :GNSS, Cell, Wifi location management.
+@version   :1.0.2
+@date      :2022-11-24 17:06:30
+@copyright :Copyright (c) 2022
+"""
+
 import ure
-import net
-try:
-    import math
-except ImportError:
-    math = None
+import math
 import utime
 import osTimer
 import _thread
 try:
-    import wifiScan
-except ImportError:
-    wifiScan = None
-try:
-    import cellLocator
-except ImportError:
-    cellLocator = None
-
-from queue import Queue
-from machine import UART, Pin
-
-from usr.modules.logging import getLogger
-from usr.modules.common import Singleton, option_lock
-
-try:
     import quecgnss
 except ImportError:
     quecgnss = None
+import cellLocator
+import usys as sys
 
-try:
-    from wifilocator import wifilocator
-except ImportError:
-    wifilocator = None
+from queue import Queue
+from machine import UART, Pin
+from wifilocator import wifilocator
+
+from usr.modules.logging import getLogger
+from usr.modules.common import option_lock
+
 
 log = getLogger(__name__)
 
@@ -223,7 +218,7 @@ class NMEAParse:
         return speed
 
 
-class GPSPower:
+class GNSSPower:
 
     def __init__(self, PowerPin, StandbyPin, BackupPin):
         self.__PowerPin = PowerPin
@@ -272,7 +267,7 @@ class GPSPower:
         return False
 
 
-class GPS(GPSPower):
+class GNSS(GNSSPower):
 
     __RMC = 0
     __GGA = 1
@@ -521,7 +516,7 @@ class GPS(GPSPower):
         return (res, gps_data)
 
 
-class CellLocator(object):
+class CellLocator:
     """This class is for reading cell location data"""
 
     def __init__(self, serverAddr, port, token, timeout, profileIdx):
@@ -530,250 +525,76 @@ class CellLocator(object):
         self.__token = token
         self.__timeout = timeout
         self.__profileIdx = profileIdx
+        self.__queue = Queue()
+        self.__thread_id = None
+        self.__timeout_timer = osTimer()
 
-    def read(self):
-        read_loc_res = self.__read_loc()
-        read_cell_res = self.__read_cell()
-        res = 0 if read_loc_res[0] == 0 or read_cell_res[0] == 0 else -1
-        return (res, read_loc_res[1], read_cell_res[1])
+    def __timeout_callback(self, args):
+        self.__queue.put(())
 
-    def __read_loc(self):
-        """Read cell location data.
+    def __read_thread(self):
+        loc_data = ()
+        try:
+            loc_data = cellLocator.getLocation(
+                self.__serverAddr,
+                self.__port,
+                self.__token,
+                self.__timeout,
+                self.__profileIdx
+            )
+            loc_data = loc_data if isinstance(loc_data, tuple) and loc_data[0] and loc_data[1] else ()
+        except Exception as e:
+            sys.print_exception(e)
+        self.__queue.put(loc_data)
 
-        Return: (res_code, loc_data)
-            res_code:
-                -  0: Success
-                - -1: Initialization failed
-                - -2: The server address is too long (more than 255 bytes)
-                - -3: Wrong key length, must be 16 bytes
-                - -4: The timeout period is out of range, the supported range is (1 ~ 300) s
-                - -5: The specified PDP network is not connected, please confirm whether the PDP is correct
-                - -6: Error getting coordinates
-            loc_data:
-                (117.1138, 31.82279, 550)
-        """
-        res = -1
-        loc_data = cellLocator.getLocation(
-            self.__serverAddr,
-            self.__port,
-            self.__token,
-            self.__timeout,
-            self.__profileIdx
-        )
-        if isinstance(loc_data, tuple) and len(loc_data) == 3:
-            res = 0
-        else:
-            res = loc_data
-            loc_data = ()
-
-        return (res, loc_data)
-
-    def __read_cell(self):
-        res = -1
-        near_cell = []
-        server_cell = []
-
-        near_cells = net.getCi()
-        if near_cells != -1 and isinstance(near_cells, list):
-            near_cell = list(map(str, near_cells))
-
-        server_cells = net.getCellInfo()
-        if server_cells != -1 and isinstance(server_cells, tuple):
-            server_cell = server_cells
-
-        res = 0 if near_cell or server_cell else -1
-        return (res, {"near_cell": near_cell, "server_cell": server_cell})
+    def read(self, timeout=5):
+        log.debug("CellLocator start read")
+        # Start read thread and stop timeout
+        self.__thread_id = _thread.start_new_thread(self.__read_thread, ())
+        self.__timeout_timer.start(timeout * 1000, 0, self.__timeout_callback)
+        # Wait loc data
+        loc_data = self.__queue.get()
+        # Stop read thread and stop timeout
+        self.__timeout_timer.stop()
+        if _thread.threadIsRunning(self.__thread_id):
+            _thread.stop_thread(self.__thread_id)
+            self.__thread_id = None
+        log.debug("CellLocator end read")
+        return loc_data
 
 
-class WiFiLocator(object):
+class WiFiLocator:
     """This class is for reading wifi location data"""
 
     def __init__(self, token):
         self.__wifilocator_obj = wifilocator(token)
+        self.__queue = Queue()
+        self.__thread_id = None
+        self.__timeout_timer = osTimer()
 
-    def read(self):
-        read_loc_res = self.__read_loc()
-        read_mac_res = self.__read_mac()
-        res = 0 if read_loc_res[0] == 0 or read_mac_res[0] == 0 else -1
-        return (res, read_loc_res[1], read_mac_res[1])
+    def __timeout_callback(self, args):
+        self.__queue.put(())
 
-    def __read_loc(self):
-        """Read wifi location data.
+    def __read_thread(self):
+        loc_data = ()
+        try:
+            loc_data = self.__wifilocator_obj.getwifilocator()
+            loc_data = loc_data if isinstance(loc_data, tuple) and loc_data[0] and loc_data[1] else ()
+        except Exception as e:
+            sys.print_exception(e)
+        self.__queue.put(loc_data)
 
-        Return: (res_code, loc_data)
-            res_code:
-                -  0: Success
-                - -1: The current network is abnormal, please confirm whether the dial-up is normal
-                - -2: Wrong key length, must be 16 bytes
-                - -3: Error getting coordinates
-            loc_data:
-                (117.1138, 31.82279, 550)
-        """
-        res = -1
-        loc_data = self.__wifilocator_obj.getwifilocator()
-        if isinstance(loc_data, tuple) and len(loc_data) == 3:
-            res = 0
-        else:
-            res = loc_data
-            loc_data = ()
-
-        return (res, loc_data)
-
-    def __read_mac(self):
-        res = -1
-        macs = []
-        if wifiScan.support():
-            if wifiScan.control(1) == 0:
-                if wifiScan.getState():
-                    wifisacn_start = wifiScan.start()
-                    if wifisacn_start != -1 and wifisacn_start[0] > 0:
-                        macs = [i[0] for i in wifisacn_start[1]]
-                        res = 0
-            wifiScan.control(0)
-        return (res, macs)
-
-
-class Location(Singleton):
-    """This class is for reading location data from gps, cell, wifi"""
-    gps = None
-    cellLoc = None
-    wifiLoc = None
-
-    class _loc_method(object):
-        gps = 0x1
-        cell = 0x2
-        wifi = 0x4
-
-    def __init__(self, loc_method, locator_init_params):
-        """Init Location module
-
-        1. If loc_method include gps then init gps module;
-        2. If loc_method inculde cell then init cell module;
-        3. If loc_method Include wifi then init wifi module;
-
-        Args:
-            loc_method(int):
-                1 - gps
-                2 - cell
-                3 - cell & gps
-                4 - wifi
-                5 - wifi & gps
-                6 - wifi & cell
-                7 - wifi & cell & gps
-            locator_init_params(dict):
-                gps_cfg(dict):GPS module init args
-                cell_cfg(dict):CELL module init args
-                wifi_cfg(dict):WIFI module init args
-        """
-        self.__loc_method = loc_method
-        self.__locator_init_params = locator_init_params
-        self.__locater_init()
-
-    def __locater_init(self):
-        """Init gps, cell, wifi by loc_method"""
-
-        if self.__loc_method & self._loc_method.gps:
-            if self.gps is None:
-                _gps_cfg = self.__locator_init_params.get("gps_cfg", {})
-                if _gps_cfg:
-                    self.gps = GPS(**_gps_cfg)
-                else:
-                    raise ValueError("Invalid gps init parameters.")
-        else:
-            self.gps = None
-
-        if self.__loc_method & self._loc_method.cell:
-            if self.cellLoc is None:
-                _cell_cfg = self.__locator_init_params.get("cell_cfg")
-                if _cell_cfg:
-                    self.cellLoc = CellLocator(**_cell_cfg)
-                else:
-                    raise ValueError("Invalid cell-locator init parameters.")
-        else:
-            self.cellLoc = None
-
-        if self.__loc_method & self._loc_method.wifi:
-            if self.wifiLoc is None:
-                _wifi_cfg = self.__locator_init_params.get("wifi_cfg")
-                if _wifi_cfg:
-                    self.wifiLoc = WiFiLocator(**_wifi_cfg)
-                else:
-                    raise ValueError("Invalid wifi-locator init parameters.")
-        else:
-            self.wifiLoc = None
-
-    def __read_gps(self, retry):
-        """Read loction data from gps module
-
-        Return:
-            $GPTXT,01,01,02,ANTSTATUS=OPEN*2B
-            $GNRMC,073144.000,A,3149.330773,N,11706.946971,E,0.00,337.47,150422,,,D,V*07
-            $GNVTG,337.47,T,,M,0.00,N,0.00,K,D*22
-            $GNGGA,073144.000,3149.330773,N,11706.946971,E,2,19,0.66,85.161,M,-0.335,M,,*56
-            $GNGSA,A,3,01,195,06,03,21,194,19,17,30,14,,,0.94,0.66,0.66,1*02
-            $GNGSA,A,3,13,26,07,10,24,25,08,03,22,,,,0.94,0.66,0.66,4*03
-            $GPGSV,3,1,12,14,84,210,31,195,67,057,46,17,52,328,28,50,51,161,33,1*54
-            $GPGSV,3,2,12,194,49,157,33,03,48,090,37,19,36,305,32,06,34,242,32,1*58
-            $GPGSV,3,3,12,01,32,041,35,30,17,204,22,21,07,051,13,07,03,183,,1*6B
-            $BDGSV,5,1,18,07,86,063,30,10,75,322,30,08,60,211,34,03,52,192,33,1*71
-            $BDGSV,5,2,18,24,44,276,33,13,43,215,33,01,43,135,30,26,40,208,37,1*71
-            $BDGSV,5,3,18,02,38,230,,04,32,119,,22,26,135,30,19,25,076,,1*70
-            $BDGSV,5,4,18,05,17,251,,25,06,322,27,09,02,211,22,21,02,179,,1*78
-            $BDGSV,5,5,18,29,02,075,,20,01,035,,1*72
-            $GNGLL,3149.330773,N,11706.946971,E,073144.000,A,D*4E
-        """
-        return self.gps.read(retry) if self.gps else ""
-
-    def __read_cell(self):
-        """Read loction data from cell module
-
-        Return:
-            (117.1138, 31.82279, 550) or ()
-        """
-        if self.cellLoc:
-            cell_loc_data = self.cellLoc.read()
-            return (cell_loc_data[1], cell_loc_data[2])
-        return ()
-
-    def __read_wifi(self):
-        """Read loction data from wifi module
-
-        Return:
-            (117.1138, 31.82279, 550) or ()
-        """
-        if self.wifiLoc:
-            wifi_loc_data = self.wifiLoc.read()
-            return (wifi_loc_data[1], wifi_loc_data[2])
-        return ()
-
-    def read(self, retry=30):
-        """Read location data
-
-        args:
-            retry(int): gps read uart data retry count.
-
-        Returns:
-            dict:
-                key:
-                    1 - GPS data
-                    2 - CELL data
-                    4 - WIFI data
-            .e.g:
-            {
-                1: "$GPGGA,XXX",
-                2: (0.00, 0.00, 0.00),
-                4: (0.00, 0.00, 0.00),
-            }
-        """
-        loc_data = {}
-
-        if self.__loc_method & self._loc_method.gps:
-            loc_data[self._loc_method.gps] = self.__read_gps(retry)
-
-        if self.__loc_method & self._loc_method.cell:
-            loc_data[self._loc_method.cell] = self.__read_cell()
-
-        if self.__loc_method & self._loc_method.wifi:
-            loc_data[self._loc_method.wifi] = self.__read_wifi()
-
+    def read(self, timeout=5):
+        log.debug("WiFiLocator start read")
+        # Start read thread and stop timeout
+        self.__thread_id = _thread.start_new_thread(self.__read_thread, ())
+        self.__timeout_timer.start(timeout * 1000, 0, self.__timeout_callback)
+        # Wait loc data
+        loc_data = self.__queue.get()
+        # Stop read thread and stop timeout
+        self.__timeout_timer.stop()
+        if _thread.threadIsRunning(self.__thread_id):
+            _thread.stop_thread(self.__thread_id)
+            self.__thread_id = None
+        log.debug("WiFiLocator end read")
         return loc_data

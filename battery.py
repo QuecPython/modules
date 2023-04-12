@@ -12,8 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+@file      :battery.py
+@author    :Jack Sun (jack.sun@quectel.com)
+@brief     :Battery management.
+@version   :1.0.2
+@date      :2022-11-24 17:06:30
+@copyright :Copyright (c) 2022
+"""
+
 import utime
-from misc import Power, ADC
+from misc import Power, ADC, USB
 from machine import Pin, ExtInt
 from usr.modules.logging import getLogger
 
@@ -77,8 +86,11 @@ class Battery(object):
         self.__stdby_gpio = None
         self.__chrg_exint = None
         self.__stdby_exint = None
+        self.__usb = None
         if self.__chrg_gpion is not None and self.__stdby_gpion is not None:
             self.__init_charge()
+        else:
+            self.__usb = USB()
 
         if not BATTERY_OCV_TABLE.get(battery_ocv):
             raise TypeError("Battery OCV %s is not support." % battery_ocv)
@@ -87,37 +99,52 @@ class Battery(object):
     def __chrg_callback(self, args):
         """Charge status change callback"""
         self.__update_charge_status()
-        if self.__charge_callback is not None:
+        if callable(self.__charge_callback):
             self.__charge_callback(self.__charge_status)
 
     def __stdby_callback(self, args):
         """Charge status change callback"""
         self.__update_charge_status()
-        if self.__charge_callback is not None:
+        if callable(self.__charge_callback):
+            self.__charge_callback(self.__charge_status)
+
+    def __usb_callback(self, args):
+        self.__update_charge_status()
+        if callable(self.__charge_callback):
             self.__charge_callback(self.__charge_status)
 
     def __update_charge_status(self):
         """Update Charge status by gpio status"""
-        chrg_level = self.__chrg_gpio.read()
-        stdby_level = self.__stdby_gpio.read()
-        if chrg_level == 1 and stdby_level == 1:
-            self.__charge_status = 0
-        elif chrg_level == 0 and stdby_level == 1:
-            self.__charge_status = 1
-        elif chrg_level == 1 and stdby_level == 0:
-            self.__charge_status = 2
+        if not self.__usb:
+            chrg_level = self.__chrg_gpio.read()
+            stdby_level = self.__stdby_gpio.read()
+            if chrg_level == 1 and stdby_level == 1:
+                # Not charge.
+                self.__charge_status = 0
+            elif chrg_level == 0 and stdby_level == 1:
+                # Charging.
+                self.__charge_status = 1
+            elif chrg_level == 1 and stdby_level == 0:
+                # Charge over.
+                self.__charge_status = 2
+            else:
+                raise TypeError("CHRG and STDBY cannot be 0 at the same time!")
         else:
-            raise TypeError("CHRG and STDBY cannot be 0 at the same time!")
+            self.__usb_charge()
 
     def __init_charge(self):
         """Init charge Pin and ExtInt"""
-        self.__chrg_gpio = Pin(self.__chrg_gpion, Pin.IN, Pin.PULL_DISABLE)
-        self.__stdby_gpio = Pin(self.__stdby_gpion, Pin.IN, Pin.PULL_DISABLE)
+        self.__chrg_gpio = Pin(self.__chrg_gpion, Pin.IN, Pin.PULL_PU)
+        self.__stdby_gpio = Pin(self.__stdby_gpion, Pin.IN, Pin.PULL_PU)
         self.__chrg_exint = ExtInt(self.__chrg_gpion, ExtInt.IRQ_RISING_FALLING, ExtInt.PULL_PU, self.__chrg_callback)
         self.__stdby_exint = ExtInt(self.__stdby_gpion, ExtInt.IRQ_RISING_FALLING, ExtInt.PULL_PU, self.__stdby_callback)
         self.__chrg_exint.enable()
         self.__stdby_exint.enable()
         self.__update_charge_status()
+
+    def __usb_charge(self):
+        _cs = self.__usb.getStatus()
+        self.__charge_status = _cs
 
     def __get_soc_from_dict(self, key, volt_arg):
         """Get battery energy from map"""
