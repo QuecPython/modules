@@ -16,7 +16,7 @@
 @file      :power_manage.py
 @author    :Jack Sun (jack.sun@quectel.com)
 @brief     :Device sleep management.
-@version   :1.0.2
+@version   :1.2.0
 @date      :2023-03-22 15:49:20
 @copyright :Copyright (c) 2022
 """

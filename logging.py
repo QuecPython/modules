@@ -16,7 +16,7 @@
 @file      :logging.py
 @author    :Jack Sun (jack.sun@quectel.com)
 @brief     :Log management.
-@version   :1.0.2
+@version   :1.2.0
 @date      :2022-11-24 17:06:30
 @copyright :Copyright (c) 2022
 """

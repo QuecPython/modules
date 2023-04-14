@@ -19,7 +19,7 @@
 @file      :net_manage.py
 @author    :Jack Sun (jack.sun@quectel.com)
 @brief     :Net management.
-@version   :1.0.2
+@version   :1.2.0
 @date      :2022-10-31 10:45:46
 @copyright :Copyright (c) 2022
 """

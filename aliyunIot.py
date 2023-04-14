@@ -16,7 +16,7 @@
 @file      :aliyunIot.py
 @author    :Jack Sun (jack.sun@quectel.com)
 @brief     :Aliyun cloud mqtt client.
-@version   :1.0.2
+@version   :1.2.0
 @date      :2022-11-24 17:06:30
 @copyright :Copyright (c) 2022
 """
@@ -302,11 +302,11 @@ class AliYunIot:
         pub_data = ujson.dumps(data) if isinstance(data, dict) else data
         return self.__cloud.publish(self.rrpc_topic_response.format(msg_id), pub_data, qos=self.__qos) if self.__cloud else False
 
-    def property_set_reply(self, mid, code, msg):
+    def property_set_reply(self, msg_id, code, msg):
         data = {
             "code": code,
             "data": {},
-            "id": mid,
+            "id": msg_id,
             "message": msg,
             "version": "1.0"
         }

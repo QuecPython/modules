@@ -2,62 +2,199 @@
 
 ## 简介
 
-> 该模块为阿里云物联网功能模块, 主要有一下两个功能
+> 该模块为阿里云物联网功能模块, 使用MQTT协议进行通信, 实现设备与服务器数据交互
+> 
+> 主要支持功能
 >
-> - 物模型导入转化类
-> - MQTT协议的消息发布与订阅, OTA升级。
+> - 消息发布与订阅
+> - OTA升级
 
-## 使用说明
 
-### 1. 物模型初始化
+## API说明
 
-```python
-from aliyunIot import AliObjectModel
+### AliYunIot
 
-object_model_file = "/usr/aliyun_object_model.json"
-ali_object_model = AliObjectModel(om_file=object_model_file)
-```
+> 该模块主要提供阿里云物联网模块的连接, 消息的发送, 消息订阅。
 
-### 2. 阿里云模块初始化
+#### 实例化对象
+
+##### 示例
 
 ```python
 from aliyunIot import AliYunIot
 
-pk = "ProductKey"
-ps = "ProductSecret"
-dk = "DeviceKey"
-ds = "DeviceSecret"
-server = "%s.iot-as-mqtt.cn-shanghai.aliyuncs.com" % pk
-client_id = dk
-
-ali = AliYunIot(pk, ps, dk, ds, server, client_id)
+cloud_cfg = {
+    "product_key": "xxx",
+    "product_secret": "xxx",
+    "device_name": "xxx",
+    "device_secret": "xxx",
+    "server": "iot-as-mqtt.cn-shanghai.aliyuncs.com",
+    "qos": 1,
+}
+cloud = AliYunIot(**cloud_cfg)
 ```
 
-### 3. 注册物模型对象
+##### 参数
+
+|参数|类型|说明|
+|:---|---|---|
+|product_key|str|产品标识|
+|product_secret|str|产品密钥|
+|device_name|str|设备名称|
+|device_secret|str|设备密钥|
+|server|str|访问域名|
+|qos|int|消息服务质量(0~1)|
+
+#### status
+
+> 查询服务器连接状态.
+
+##### 示例
 
 ```python
-from aliyunIot import AliObjectModel
-
-ali_object_model = AliObjectModel()
-res = ali.set_object_model(ali_object_model)
+conn_status = cloud.status
+print(conn_status)
+# True
 ```
 
-### 4. 添加监听者
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 已连接<br>`False` - 未连接|
+
+#### auth_info
+
+> 查询认证信息.
+
+##### 示例
 
 ```python
-from remote import RemoteSubscribe
-
-remote_sub = RemoteSubscribe()
-ali.addObserver(remote_sub)
+auth_info = cloud.auth_info
+print(auth_info)
+# {"product_key": "xxx", "product_secret": "xxx", "device_name": "xxx", "device_secret": "xxx"}
 ```
 
-### 5. 连接初始化
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|dict|`product_key` - 产品标识<br>`product_secret` - 产品密钥<br>`device_name` - 设备名称<br>`device_secret` - 设备密钥<br>|
+
+#### add_event
+
+> 添加需要订阅的事件标识, 用于订阅事件发布应答topic.
+
+##### 示例
 
 ```python
-res = ali.init(enforce=False)
+res = cloud.add_event("sos_alarm")
+print(res)
+# True
 ```
 
-### 6. 发布消息(物模型)
+##### 参数
+
+|参数|类型|说明|
+|:---|---|---|
+|event|str|事件标识|
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
+
+#### add_service
+
+> 添加需要订阅的服务标识, 用于订阅服务topic.
+
+##### 示例
+
+```python
+res = cloud.add_service("report_location")
+print(res)
+# True
+```
+
+##### 参数
+
+|参数|类型|说明|
+|:---|---|---|
+|service|str|服务标识|
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
+
+#### set_callback
+
+> 设置接收服务端下发的数据信息.
+
+##### 示例
+
+```python
+def cloud_callback(args):
+    print("topic: %s, data: %s" % (args[0], args[1]))
+
+cloud.set_callback(cloud_callback)
+```
+
+##### 参数
+
+|参数|类型|说明|
+|:---|---|---|
+|callback|function|用于接收服务端下发的数据信息,<br>函数入参`args`, 数据格式`(topic, data)`|
+
+##### 返回值
+
+无
+
+#### connect
+
+> 连接登录阿里云服务器.
+
+##### 示例
+
+```python
+res = cloud.connect()
+print(res)
+# 0
+```
+
+##### 参数
+
+无
+
+#### disconnect
+
+> 断开阿里云服务器连接.
+
+##### 示例
+
+```python
+res = cloud.disconnect()
+print(res)
+# True
+```
+
+##### 参数
+
+无
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
+
+#### properties_report
+
+> 物模型属性上报.
+
+##### 示例
 
 ```python
 data = {
@@ -70,263 +207,420 @@ data = {
         "CoordinateSystem": 1
     }
 }
-res = ali.post_data(data)
+res = cloud.properties_report(data)
+print(res)
+# True
 ```
 
-### 7. MQTT同步通信(RRPC)消息应答
-
-> 当订阅了RRPC同步通信的topic, 收到了RRPC消息时后进行应答
-
-```python
-message_id = 10
-data = {"local_time": 1655273004000}
-res = ali.rrpc_response(message_id, data)
-```
-
-### 8. 设备固件版本与项目应用版本信息上报
-
-```python
-res = ali.device_report()
-```
-
-### 9. OTA升级计划查询
-
-```python
-res = ali.ota_request()
-```
-
-### 10. 确认是否OTA升级
-
-```python
-action = 1
-module = "QuecPython-AliyunIot"
-res = ali.ota_action(action, module)
-```
-
-### 11. 设备模块版本信息上报
-
-```python
-version = "v2.1.0"
-module = "QuecPython-AliyunIot"
-res = ali.ota_device_inform(version, module)
-```
-
-### 12. 设备上报升级进度
-
-```python
-step = 10
-desc = "updating"
-module = "QuecPython-AliyunIot"
-res = ali.ota_device_progress(step, desc, module)
-```
-
-### 13. 设备请求OTA升级包信息
-
-```python
-module = "QuecPython-AliyunIot"
-res = ali.ota_firmware_get(module)
-```
-
-### 14. 设备请求下载文件分片
-
-```python
-fileToken = "xxxx"
-streamId = "xxxx"
-fileId = "xxxx"
-size = 512
-offset = 2
-res = ali.ota_file_download(fileToken, streamId, fileId, size, offset)
-```
-
-### 15. 断开连接
-
-```python
-res = ali.close()
-```
-
-## API说明
-
-### AliObjectModel
-
-> - 该模块是将阿里云导出的json格式的精简物模型数据转化成一个物模型类, 方便使用;
-> - 该类初始化完成后有三个属性, 为`properties`, `events`, `services`, 且每个属性为一个对象;
-> - 物模型具体的key值为`properties`, `events`, `services`对象的属性, 属性值为默认的数据类型值;
-
-示例:
-
-```python
-from aliyunIot import AliObjectModel
-
-object_model_file = "/usr/aliyun_object_model.json"
-ali_object_model = AliObjectModel(om_file=object_model_file)
-
-print(ali_object_model.properties.power_switch)
-# {"power_switch": True}
-print(ali_object_model.properties.GeoLocation)
-# {"GeoLocation": {"Longitude": 0.0, "Latitude": 0.0, "Altitude": 0.0, "CoordinateSystem": 0}}
-print(ali_object_model.events.sos_alert)
-# {"sos_alert": {"local_time": 0, "GeoLocation": {"Longitude": 0.0, "Latitude": 0.0, "Altitude": 0.0, "CoordinateSystem": 0}}}
-print(ali_object_model.services.query_device_info)
-# {"input": {"GeoLocation": {}}, "output": {"GeoLocation": {"Longitude": 0.0, "Latitude": 0.0, "Altitude": 0.0, "CoordinateSystem": 0}}}
-```
-
-参数:
+##### 参数
 
 |参数|类型|说明|
 |:---|---|---|
-|om_file|STRING|物模型文件全路径地址, 可选, 默认`/usr/aliyun_object_model.json`|
+|data|dict|物模型数据|
 
-### AliYunIot
+##### 返回值
 
-> 该模块主要提供阿里云物联网模块的连接, 消息的发送, 消息订阅, OTA升级功能。
-> 
-> 该功能以监听者模式进行设计, 本身既是监听者, 亦是被监听者
-> 
-> - 监听者: 可作为`remote`模块的`RemotePublish`类的监听者, 用于接收其消息的通知, 进行数据的发布.
-> - 被监听者: 可作为`remote`模块的`RemoteSubscribe`类的被监听者, 用户通知监听者服务器下发的数据信息.
->
-> 该模块继承`common`模块中的`CloudObservable`方法, 其方法见`common`模块文档, 在此不再赘述。
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
 
-#### 导入初始化
+#### event_report
 
-示例:
+> 事件上报.
+
+##### 示例
 
 ```python
-from aliyunIot import AliYunIot
+event = "sos_alarm"
+data = {
+    "time": str(utime.mktime(utime.local_time()) * 1000),
+}
+res = cloud.event_report(event, data)
+print(res)
+# True
+```
 
-pk = "ProductKey"
-ps = "ProductSecret"
-dk = "DeviceKey"
-ds = "DeviceSecret"
-server = "%s.iot-as-mqtt.cn-shanghai.aliyuncs.com" % pk
-client_id = dk
-burning_method = 0
-life_time = 120
-mcu_name = "QuecPython-AliyunIot"
-mcu_version = "v2.0.1"
+##### 参数
+
+|参数|类型|说明|
+|:---|---|---|
+|event|str|事件标识|
+|data|dict|事件相关信息|
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
+
+#### service_response
+
+> 服务消息应答.
+
+##### 示例
+
+```python
+service = "report_location"
+code = 200
+data = {
+    "GeoLocation": {
+        "Longitude": 100.26,
+        "Latitude": 26.86,
+        "Altitude": 0.0,
+        "CoordinateSystem": 1
+    }
+}
+msg_id = "102"
+message = "success"
+res = cloud.service_response(service, code, data, msg_id, message)
+print(res)
+# True
+```
+
+##### 参数
+
+|参数|类型|说明|
+|:---|---|---|
+|service|str|服务标识|
+|code|int|成功标识, 200 - 成功, 其他 - 失败|
+|data|dict|服务相关信息|
+|msg_id|str|消息id|
+|message|str|备注信息|
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
+
+#### rrpc_response
+
+> RRPC下发消息应答.
+
+##### 示例
+
+```python
+msg_id = "103"
+data = {
+    "phone_num": "123456789",
+}
+res = cloud.rrpc_response(msg_id, data)
+print(res)
+# True
+```
+
+##### 参数
+
+|参数|类型|说明|
+|:---|---|---|
+|msg_id|str|消息id|
+|data|dict|RRPC相关信息|
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
+
+#### property_set_reply
+
+> 属性设置消息应答.
+
+##### 示例
+
+```python
+msg_id = "103"
+code = 200
+msg = "success"
+res = cloud.property_set_reply(msg_id, code, msg)
+print(res)
+# True
+```
+
+##### 参数
+
+|参数|类型|说明|
+|:---|---|---|
+|msg_id|str|消息id|
+|code|int|成功标识, 200 - 成功, 其他 - 失败|
+|msg|str|备注信息|
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
+
+#### ota_device_inform
+
+> 设备模块标识与版本上报.
+
+##### 示例
+
+```python
+# Software module and version
+module = "QuecPython-Tracker"
+version = "2.2.0"
+# Firmware module and ￿version
+# module = "EC600N-CNLC"
+# version = "EC600NCNLCR03A11M16_OCPU_QPY_BETA0313"
+res = cloud.ota_device_inform(version, module)
+print(res)
+# True
+```
+
+##### 参数
+
+|参数|类型|说明|
+|:---|---|---|
+|module|str|模块标识|
+|version|str|版本信息|
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
+
+#### ota_firmware_get
+
+> 设备模块OTA升级计划查询.
+
+##### 示例
+
+```python
+# Software module and version
+module = "QuecPython-Tracker"
+# Firmware module and ￿version
+# module = "EC600N-CNLC"
+res = cloud.ota_firmware_get(module)
+print(res)
+# True
+```
+
+##### 参数
+
+|参数|类型|说明|
+|:---|---|---|
+|module|str|模块标识|
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
+
+#### ota_device_progress
+
+> 设备模块OTA升级进度上报.
+
+##### 示例
+
+```python
+step = 100
+desc = "success."
+# Software module and version
+module = "QuecPython-Tracker"
+# Firmware module and ￿version
+# module = "EC600N-CNLC"
+res = cloud.ota_device_progress(step, desc, module)
+print(res)
+# True
+```
+
+##### 参数
+
+|参数|类型|说明|
+|:---|---|---|
+|step|int|-1 - 取消升级<br> 1~100 - 升级进度|
+|desc|str|备注信息|
+|module|str|模块标识|
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
+
+### AliYunOTA
+
+> 该模块主要提供阿里云物联网模块的连接, 消息的发送, 消息订阅。
+
+#### 实例化对象
+
+##### 示例
+
+```python
+from aliyunIot import AliYunOTA
+
+project_name = "QuecPython-Tracker"
 firmware_name = "EC600N-CNLC"
-firmware_version = "EC600NCNLCR01A01M08_PY_BETA0527"
-reconn = True
-ali = AliYunIot(
-    pk, ps, dk, ds, server, client_id, burning_method,
-    life_time, mcu_name, mcu_version, firmware_name,
-    firmware_version, reconn
-)
+cloud_ota = AliYunOTA(project_name, firmware_name)
 ```
 
-参数:
+##### 参数
 
 |参数|类型|说明|
 |:---|---|---|
-|pk|STRING|产品标识|
-|ps|STRING|产品密钥|
-|dk|STRING|设备名称|
-|ds|STRING|device secret|
-|server|STRING|设备密钥|
-|client_id|STRING|自定义阿里云连接id, 默认设备名称|
-|burning_method|INT|0 - 一型一密, 1 - 一机一密, 默认0|
-|life_time|INT|通信之间允许的最长时间段（以秒为单位）, 默认为300, 范围（60-1200）, 默认120|
-|mcu_name|STRING|设备模块名称, 默认空字符串|
-|mcu_version|STRING|设备模块版本号, 默认空字符串|
-|firmware_name|STRING|固件名称, 默认空字符串|
-|firmware_version|STRING|固件版本号, 默认空字符串|
-|reconn|BOOL|控制是否使用内部重连的标志, 默认开启为True|
+|project_name|str|软件模块标识|
+|firmware_name|str|硬件模块标识|
 
-#### set_object_model 注册物模型对象(`AliObjectModel`实例)
+#### set_cloud
 
-示例:
+> 设置`AliYunIot`实例化对象, 用于上报升级进度.
+
+##### 示例
 
 ```python
-from aliyunIot import AliObjectModel
-
-ali_object_model = AliObjectModel()
-res = ali.set_object_model(ali_object_model)
+cloud_ota.set_cloud(cloud)
 ```
 
-参数:
+##### 参数
 
 |参数|类型|说明|
 |:---|---|---|
-|object_model|OBJECT|物模型类实例对象|
+|cloud|object|`AliYunIot`对象|
 
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`成功, `False`失败|
-
-#### init 连接初始化
-
-示例:
-
-```python
-res = ali.init(enforce=False)
-```
-
-参数:
-
-|参数|类型|说明|
-|:---|---|---|
-|enforce|BOOL|是否重新连接, True 是, False 否, 默认否|
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`成功, `False`失败|
-
-#### close 断开连接
-
-示例:
-
-```python
-res = ali.close()
-```
-
-参数:
+##### 返回值
 
 无
 
-返回值:
+#### set_ota_data
 
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`成功, `False`失败|
+> 设置OTA升级计划具体信息.
 
-#### get_status 查询连接状态
-
-示例:
+##### 示例
 
 ```python
-res = ali.get_status()
+cloud_ota.set_ota_data(data)
 ```
 
-参数:
-
-无
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`已连接, `False`未连接|
-
-#### post_data 发布消息(物模型)
-
-示例:
-
-```python
-res = ali.post_data(data)
-```
-
-参数:
+##### 参数
 
 |参数|类型|说明|
 |:---|---|---|
-|data|DICT|物模型key, value值|
+|data|dict|[阿里云OTA升级包信息](https://help.aliyun.com/document_detail/85700.html#section-nm2-m4c-r2b)|
 
-```json
-{
+##### 返回值
+
+无
+
+#### get_ota_info
+
+> 获取OTA升级模块标识与目标版本号.
+
+##### 示例
+
+```python
+data = cloud_ota.get_ota_info()
+```
+
+##### 参数
+
+无
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|dict|`ota_module` - 升级模块标识<br>`ota_version` - 升级目标版本号|
+
+#### start
+
+> 开始OTA升级.
+
+##### 示例
+
+```python
+data = cloud_ota.start()
+```
+
+##### 参数
+
+无
+
+##### 返回值
+
+|数据类型|说明|
+|:---|---|
+|bool|`True` - 成功<br>`False` - 失败|
+
+## 使用示例
+
+```python
+from misc import Power
+from aliyunIot import AliYunIot, AliYunOTA
+
+
+def cloud_callback(args):
+    global cloud, cloud_ota
+    topic, data = args
+    if "/thing/service/" in topic:
+        # 服务信息下发处理应答
+        service = topic.split("/")[-1]
+        code = 200
+        data = {}
+        msg_id = data["id"]
+        message = "success"
+        cloud.service_response(service, code, data, msg_id, message)
+    elif "/rrpc/request/" in topic:
+        # RRPC同步消息下发处理应答
+        msg_id = topic.split("/")[-1]
+        data = {}
+        cloud.rrpc_response(msg_id, data)
+    elif "/thing/service/property/set" in topic:
+        # 物模型数据下发处理应答
+        msg_id = data["id"]
+        code = 200
+        msg = "success"
+        cloud.property_set_reply(msg_id, code, msg)
+    elif topic.startswith("/ota/device/inform/") or topic.endswith("/ota/firmware/get_reply"):
+        # OTA升级计划下发
+        cloud_ota.set_ota_data(data)
+        step = 1
+        desc = "start ota."
+        ota_module = cloud_ota.get_ota_info()["ota_module"]
+        # OTA升级进度上报
+        cloud.ota_device_progress(step, desc, ota_module)
+        if cloud_ota.start():
+            cloud.ota_device_progress(100, "success", ota_module)
+        else:
+            cloud.ota_device_progress(100, "failed", ota_module)
+        Power.powerRestart()
+
+
+# 阿里云模块初始化
+cloud_cfg = {
+    "product_key": "xxx",
+    "product_secret": "xxx",
+    "device_name": "xxx",
+    "device_secret": "xxx",
+    "server": "iot-as-mqtt.cn-shanghai.aliyuncs.com",
+    "qos": 1,
+}
+cloud = AliYunIot(**cloud_cfg)
+
+# 阿里云OTA模块初始化
+project_name = "QuecPython-Tracker"
+firmware_name = "EC600N-CNLC"
+cloud_ota = AliYunOTA(project_name, firmware_name)
+
+# 阿里云模块注册回调函数
+cloud.set_callback(cloud_callback)
+
+# 添加事件
+cloud.add_event("sos_alarm")
+cloud.add_event("low_power_alarm")
+
+# 添加服务
+cloud.add_service("query_phone_num")
+cloud.add_service("query_power_level")
+
+# 连接服务
+cloud.connect()
+
+# 物模型属性上报
+data = {
     "phone_num": "123456789",
     "energy": 100,
     "GeoLocation": {
@@ -336,175 +630,21 @@ res = ali.post_data(data)
         "CoordinateSystem": 1
     }
 }
+cloud.properties_report(data)
+
+# 事件上报
+event = "low_power_alarm"
+data = {"power_level": 20}
+cloud.event_report(event, data)
+
+# 软件模块版本信息上报
+PROJECT_NAME = "QuecPython-Tracker-Laike"
+PROJECT_VERSION = "1.1.0"
+cloud.ota_device_inform(PROJECT_VERSION, PROJECT_NAME)
+
+# 软件模块OTA升级计划查询
+cloud.ota_firmware_get(PROJECT_NAME)
+
+# 断开服务器连接
+cloud.disconnect()
 ```
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`已连接, `False`未连接|
-
-#### rrpc_response MQTT同步通信(RRPC)消息应答
-
-示例:
-
-```python
-res = ali.rrpc_response(message_id, data)
-```
-
-参数:
-
-|参数|类型|说明|
-|:---|---|---|
-|message_id|STRING|RRPC消息id|
-|data|STRING/DICT|RRPC应答消息内容|
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`成功, `False`失败|
-
-#### device_report 设备固件版本与项目应用版本信息上报
-
-示例:
-
-```python
-res = ali.device_report()
-```
-
-参数:
-
-无
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`成功, `False`失败|
-
-#### ota_request OTA升级计划查询
-
-示例:
-
-```python
-res = ali.ota_request()
-```
-
-参数:
-
-无
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`成功, `False`失败|
-
-#### ota_action 确认是否OTA升级
-
-示例:
-
-```python
-res = ali.ota_action(action, module)
-```
-
-参数:
-
-|参数|类型|说明|
-|:---|---|---|
-|action|INT| 0 取消升级, 1 确认升级|
-|module|STRING|升级模块, 固件名或项目名|
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`成功, `False`失败|
-
-#### ota_device_inform 设备模块版本信息上报
-
-示例:
-
-```python
-res = ali.ota_device_inform(version, module)
-```
-
-参数:
-
-|参数|类型|说明|
-|:---|---|---|
-|version|STRING| 模块版本信息 |
-|module|STRING| 模块名称 |
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`成功, `False`失败|
-
-#### ota_device_progress 设备上报升级进度
-
-示例:
-
-```python
-res = ali.ota_device_progress(step, desc, module)
-```
-
-参数:
-
-|参数|类型|说明|
-|:---|---|---|
-|step|STRING| OTA升级进度。取值范围：1~100的整数：升级进度百分比。-1：升级失败。-2：下载失败。-3：校验失败。-4：烧写失败。 |
-|desc|STRING| 当前步骤的描述信息, 长度不超过128个字符。如果发生异常, 此字段可承载错误信息。 |
-|module|STRING| 升级包所属的模块名。 |
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`成功, `False`失败|
-
-#### ota_firmware_get 设备请求OTA升级包信息
-
-示例:
-
-```python
-res = ali.ota_firmware_get(module)
-```
-
-参数:
-
-|参数|类型|说明|
-|:---|---|---|
-|module|STRING| 升级包所属的模块名。 |
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`成功, `False`失败|
-
-#### ota_file_download 设备请求下载文件分片
-
-示例:
-
-```python
-res = ali.ota_file_download(fileToken, streamId, fileId, size, offset)
-```
-
-参数:
-
-|参数|类型|说明|
-|:---|---|---|
-|fileToken|STRING|文件的唯一标识Token |
-|streamId|STRING|通过MQTT协议下载OTA升级包时的唯一标识。 |
-|fileId|STRING|单个升级包文件的唯一标识。 |
-|size|STRING|请求下载的文件分片大小, 单位字节。取值范围为256 B~131072 B。若为最后一个文件分片, 取值范围1 B~131072 B。 |
-|offset|STRING|文件分片对应字节的起始地址。取值范围为0~16777216。 |
-
-返回值:
-
-|数据类型|说明|
-|:---|---|
-|BOOL|`True`成功, `False`失败|
