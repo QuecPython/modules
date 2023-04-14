@@ -361,7 +361,7 @@ print(res)
 # Software module and version
 module = "QuecPython-Tracker"
 version = "2.2.0"
-# Firmware module and ￿version
+# Firmware module and version
 # module = "EC600N-CNLC"
 # version = "EC600NCNLCR03A11M16_OCPU_QPY_BETA0313"
 res = cloud.ota_device_inform(version, module)
@@ -391,7 +391,7 @@ print(res)
 ```python
 # Software module and version
 module = "QuecPython-Tracker"
-# Firmware module and ￿version
+# Firmware module and version
 # module = "EC600N-CNLC"
 res = cloud.ota_firmware_get(module)
 print(res)
@@ -421,7 +421,7 @@ step = 100
 desc = "success."
 # Software module and version
 module = "QuecPython-Tracker"
-# Firmware module and ￿version
+# Firmware module and version
 # module = "EC600N-CNLC"
 res = cloud.ota_device_progress(step, desc, module)
 print(res)
