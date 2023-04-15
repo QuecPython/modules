@@ -56,18 +56,29 @@ print(temperature, humidity)
 
 |数据类型|说明|
 |:---|---|
-|TUPLE|元素1为温度, 元素2为湿度, 两个数值都为浮点型, 获取失败时对应数值为None|
+|tuple|元素1为温度, 元素2为湿度, 两个数值都为浮点型, 获取失败时对应数值为None|
 
 ## 使用示例
 
 ```python
+from machine import I2C
 from temp_humidity_sensor import TempHumiditySensor
 
-# 1. 模块初始化
-temp_humidity_obj = TempHumiditySensor()
+i2cn = I2C.I2C1
+mode = I2C.FAST_MODE
+calibration = 0xE1
+start_measurment = 0xAC
+reset = 0xBA
+i2c_addr = 0x38
+
+# 功能模块初始化
+temp_humidity_obj = TempHumiditySensor(
+    i2cn=I2C.I2C1, mode=I2C.FAST_MODE, calibration=calibration,
+    start_measurment=start_measurment,reset=reset, i2c_addr=i2c_addr
+)
 
 # 读取设备温度与湿度信息
 temperature, humidity = temp_humidity_obj.read()
 print(temperature, humidity)
-# 28.86, 41.36
+# 28.86 41.36
 ```
