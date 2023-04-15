@@ -24,9 +24,9 @@ battery = Battery(adc_args=adc_args, chrg_gpion=chrg_gpion, stdby_gpion=stdby_gp
 
 |参数|类型|说明|
 |:---|---|---|
-|adc_args|TUPLE|元素1: [ADC通道](https://python.quectel.com/wiki/#/zh-cn/api/QuecPythonClasslib?id=%e8%af%bb%e5%8f%96%e9%80%9a%e9%81%93%e7%94%b5%e5%8e%8b%e5%80%bc), 元素2: ADC循环读取次数, 元素3: 计算系数, 可选|
-|chrg_gpion|INT|CHRG （引脚 1）：漏极开路输出的充电状态指示端。可选|
-|stdby_gpion|INT|STDBY （引脚 5）：电池充电完成指示端。可选|
+|adc_args|tuple|元素1: [ADC通道](https://python.quectel.com/wiki/#/zh-cn/api/QuecPythonClasslib?id=%e8%af%bb%e5%8f%96%e9%80%9a%e9%81%93%e7%94%b5%e5%8e%8b%e5%80%bc), 元素2: ADC循环读取次数, 元素3: 计算系数, 可选|
+|chrg_gpion|int|CHRG （引脚 1）：漏极开路输出的充电状态指示端。可选|
+|stdby_gpion|int|STDBY （引脚 5）：电池充电完成指示端。可选|
 
 ### set_charge_callback
 
@@ -45,13 +45,13 @@ res = battery.set_charge_callback(charge_callback)
 
 |参数|类型|说明|
 |:---|---|---|
-|charge_callback|FUNCTION|充电事件回调函数, 回调函数参数为设备充电状态: 0-未充电;1-充电中;2-充电完成|
+|charge_callback|function|充电事件回调函数, 回调函数参数为设备充电状态: 0-未充电;1-充电中;2-充电完成|
 
 **返回值:**
 
 |数据类型|说明|
 |:---|---|
-|BOOL|`True`成功, `False`失败|
+|bool|`True`成功, `False`失败|
 
 ### set_temp
 
@@ -67,13 +67,13 @@ res = battery.set_temp(20)
 
 |参数|类型|说明|
 |:---|---|---|
-|temp|INT/FLOAT|温度值, 单位:摄氏度 |
+|temp|int/float|温度值, 单位:摄氏度 |
 
 **返回值:**
 
 |数据类型|说明|
 |:---|---|
-|BOOL|`True`成功, `False`失败|
+|bool|`True`成功, `False`失败|
 
 ### voltage
 
@@ -90,7 +90,7 @@ battery.voltage
 
 |数据类型|说明|
 |:---|---|
-|INT|电池电压, 单位mV。|
+|int|电池电压, 单位mV。|
 
 ### energy
 
@@ -107,7 +107,7 @@ res = battery.energy
 
 |数据类型|说明|
 |:---|---|
-|INT|电池电量百分比, 0~100。|
+|int|电池电量百分比, 0~100。|
 
 ### charge_status
 
@@ -124,7 +124,7 @@ battery.charge_status
 
 |数据类型|说明|
 |:---|---|
-|INT|0-未充电<br>1-充电中<br>2-充电完成|
+|int|0-未充电<br>1-充电中<br>2-充电完成|
 
 ## 使用示例
 
