@@ -124,7 +124,7 @@ log = Logger("test_log")
 
 |参数|类型|说明|
 |:---|---|---|
-|name|STRING|日志模块名|
+|name|str|日志模块名|
 
 #### debug
 
@@ -141,7 +141,7 @@ log.debug("debug log")
 
 |参数|类型|说明|
 |:---|---|---|
-|message|STRING|日志信息|
+|message|str|日志信息|
 
 返回值:
 
@@ -162,7 +162,7 @@ log.info("info log")
 
 |参数|类型|说明|
 |:---|---|---|
-|message|STRING|日志信息|
+|message|str|日志信息|
 
 返回值:
 
@@ -183,7 +183,7 @@ log.warn("warn log")
 
 |参数|类型|说明|
 |:---|---|---|
-|message|STRING|日志信息|
+|message|str|日志信息|
 
 返回值:
 
@@ -204,7 +204,7 @@ log.error("error log")
 
 |参数|类型|说明|
 |:---|---|---|
-|message|STRING|日志信息|
+|message|str|日志信息|
 
 返回值:
 
@@ -225,7 +225,7 @@ log.critical("critical log")
 
 |参数|类型|说明|
 |:---|---|---|
-|message|STRING|日志信息|
+|message|str|日志信息|
 
 返回值:
 
