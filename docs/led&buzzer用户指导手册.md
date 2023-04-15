@@ -6,7 +6,7 @@
 
 ## API说明
 
-> 接口说明见[common用户知道手册 GPIOCtrl](./common用户指导手册.md#gpioctrl-gpio控制基类)
+> 接口说明见[`common.py`用户指导手册 GPIOCtrl](./common用户指导手册.md#gpioctrl-gpio控制基类)
 
 ## 使用示例
 
