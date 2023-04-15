@@ -23,7 +23,7 @@ hist = History(history_file="/usr/tracker_data.hist", max_hist_num=100)
 |history_file|str|全路径历史文件名称, 默认`/usr/tracker_data.hist`|
 |max_hist_num|int|最大存储历史数据条数, 默认100|
 
-### read 读取历史文件
+### read
 
 > 将历史文件中的数据读取出来, 并将历史文件清空, 防止重复读取
 
@@ -45,7 +45,7 @@ print(data)
 |:---|---|
 |dict|key值为`data`, value值为列表, 列表元素为存入的历史数据|
 
-### write 写入历史文件
+### write
 
 > 将数据写入历史文件中, 当文件中有数据时, 则在文件中追加写入, 并保证总写入的数据不大于设置的最大保存数据条数
 
@@ -69,7 +69,7 @@ hist.write(data)
 |:---|---|
 |bool|`True`成功<br>`False`失败|
 
-### clean 清除历史文件
+### clean
 
 > 将历史数据文件清除
 
