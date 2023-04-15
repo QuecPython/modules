@@ -18,7 +18,7 @@
 
 #### 实例化对象
 
-**示例**
+**示例:**
 
 ```python
 from aliyunIot import AliYunIot
@@ -34,7 +34,7 @@ cloud_cfg = {
 cloud = AliYunIot(**cloud_cfg)
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
@@ -49,7 +49,7 @@ cloud = AliYunIot(**cloud_cfg)
 
 > 查询服务器连接状态.
 
-**示例**
+**示例:**
 
 ```python
 conn_status = cloud.status
@@ -57,7 +57,7 @@ print(conn_status)
 # True
 ```
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -67,7 +67,7 @@ print(conn_status)
 
 > 查询认证信息.
 
-**示例**
+**示例:**
 
 ```python
 auth_info = cloud.auth_info
@@ -75,7 +75,7 @@ print(auth_info)
 # {"product_key": "xxx", "product_secret": "xxx", "device_name": "xxx", "device_secret": "xxx"}
 ```
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -85,7 +85,7 @@ print(auth_info)
 
 > 添加需要订阅的事件标识, 用于订阅事件发布应答topic.
 
-**示例**
+**示例:**
 
 ```python
 res = cloud.add_event("sos_alarm")
@@ -93,13 +93,13 @@ print(res)
 # True
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
 |event|str|事件标识|
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -109,7 +109,7 @@ print(res)
 
 > 添加需要订阅的服务标识, 用于订阅服务topic.
 
-**示例**
+**示例:**
 
 ```python
 res = cloud.add_service("report_location")
@@ -117,13 +117,13 @@ print(res)
 # True
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
 |service|str|服务标识|
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -133,7 +133,7 @@ print(res)
 
 > 设置接收服务端下发的数据信息.
 
-**示例**
+**示例:**
 
 ```python
 def cloud_callback(args):
@@ -142,13 +142,13 @@ def cloud_callback(args):
 cloud.set_callback(cloud_callback)
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
 |callback|function|用于接收服务端下发的数据信息,<br>函数入参`args`, 数据格式`(topic, data)`|
 
-**返回值**
+**返回值:**
 
 无
 
@@ -156,7 +156,7 @@ cloud.set_callback(cloud_callback)
 
 > 连接登录阿里云服务器.
 
-**示例**
+**示例:**
 
 ```python
 res = cloud.connect()
@@ -164,7 +164,7 @@ print(res)
 # 0
 ```
 
-**参数**
+**参数:**
 
 无
 
@@ -172,7 +172,7 @@ print(res)
 
 > 断开阿里云服务器连接.
 
-**示例**
+**示例:**
 
 ```python
 res = cloud.disconnect()
@@ -180,11 +180,11 @@ print(res)
 # True
 ```
 
-**参数**
+**参数:**
 
 无
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -194,7 +194,7 @@ print(res)
 
 > 物模型属性上报.
 
-**示例**
+**示例:**
 
 ```python
 data = {
@@ -212,13 +212,13 @@ print(res)
 # True
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
 |data|dict|物模型数据|
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -228,7 +228,7 @@ print(res)
 
 > 事件上报.
 
-**示例**
+**示例:**
 
 ```python
 event = "sos_alarm"
@@ -240,14 +240,14 @@ print(res)
 # True
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
 |event|str|事件标识|
 |data|dict|事件相关信息|
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -257,7 +257,7 @@ print(res)
 
 > 服务消息应答.
 
-**示例**
+**示例:**
 
 ```python
 service = "report_location"
@@ -277,7 +277,7 @@ print(res)
 # True
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
@@ -287,7 +287,7 @@ print(res)
 |msg_id|str|消息id|
 |message|str|备注信息|
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -297,7 +297,7 @@ print(res)
 
 > RRPC下发消息应答.
 
-**示例**
+**示例:**
 
 ```python
 msg_id = "103"
@@ -309,14 +309,14 @@ print(res)
 # True
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
 |msg_id|str|消息id|
 |data|dict|RRPC相关信息|
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -326,7 +326,7 @@ print(res)
 
 > 属性设置消息应答.
 
-**示例**
+**示例:**
 
 ```python
 msg_id = "103"
@@ -337,7 +337,7 @@ print(res)
 # True
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
@@ -345,7 +345,7 @@ print(res)
 |code|int|成功标识, 200 - 成功, 其他 - 失败|
 |msg|str|备注信息|
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -355,7 +355,7 @@ print(res)
 
 > 设备模块标识与版本上报.
 
-**示例**
+**示例:**
 
 ```python
 # Software module and version
@@ -369,14 +369,14 @@ print(res)
 # True
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
 |module|str|模块标识|
 |version|str|版本信息|
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -386,7 +386,7 @@ print(res)
 
 > 设备模块OTA升级计划查询.
 
-**示例**
+**示例:**
 
 ```python
 # Software module and version
@@ -398,13 +398,13 @@ print(res)
 # True
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
 |module|str|模块标识|
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -414,7 +414,7 @@ print(res)
 
 > 设备模块OTA升级进度上报.
 
-**示例**
+**示例:**
 
 ```python
 step = 100
@@ -428,7 +428,7 @@ print(res)
 # True
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
@@ -436,7 +436,7 @@ print(res)
 |desc|str|备注信息|
 |module|str|模块标识|
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -448,7 +448,7 @@ print(res)
 
 #### 实例化对象
 
-**示例**
+**示例:**
 
 ```python
 from aliyunIot import AliYunOTA
@@ -458,7 +458,7 @@ firmware_name = "EC600N-CNLC"
 cloud_ota = AliYunOTA(project_name, firmware_name)
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
@@ -469,19 +469,19 @@ cloud_ota = AliYunOTA(project_name, firmware_name)
 
 > 设置`AliYunIot`实例化对象, 用于上报升级进度.
 
-**示例**
+**示例:**
 
 ```python
 cloud_ota.set_cloud(cloud)
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
 |cloud|object|`AliYunIot`对象|
 
-**返回值**
+**返回值:**
 
 无
 
@@ -489,19 +489,19 @@ cloud_ota.set_cloud(cloud)
 
 > 设置OTA升级计划具体信息.
 
-**示例**
+**示例:**
 
 ```python
 cloud_ota.set_ota_data(data)
 ```
 
-**参数**
+**参数:**
 
 |参数|类型|说明|
 |:---|---|---|
 |data|dict|[阿里云OTA升级包信息](https://help.aliyun.com/document_detail/85700.html#section-nm2-m4c-r2b)|
 
-**返回值**
+**返回值:**
 
 无
 
@@ -509,17 +509,17 @@ cloud_ota.set_ota_data(data)
 
 > 获取OTA升级模块标识与目标版本号.
 
-**示例**
+**示例:**
 
 ```python
 data = cloud_ota.get_ota_info()
 ```
 
-**参数**
+**参数:**
 
 无
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
@@ -529,17 +529,17 @@ data = cloud_ota.get_ota_info()
 
 > 开始OTA升级.
 
-**示例**
+**示例:**
 
 ```python
 data = cloud_ota.start()
 ```
 
-**参数**
+**参数:**
 
 无
 
-**返回值**
+**返回值:**
 
 |数据类型|说明|
 |:---|---|
