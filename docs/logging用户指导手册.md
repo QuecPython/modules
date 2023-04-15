@@ -8,7 +8,7 @@
 
 ### getLogger
 
-> 获取知道名称的日志实例对象
+> 获取指定名称的日志实例对象
 
 示例:
 
@@ -32,7 +32,7 @@ log = getLogger("test_log")
 
 ### setLogSave
 
-> 设置日志存储相关参数, 此处设置的是整个项目中所有日志都进行存储。
+> 设置日志存储相关参数, 此处设置的存储信息是项目级别的日志属性。
 
 示例:
 
@@ -60,7 +60,7 @@ setLogSave(save, path, name, size, backups)
 
 ### setLogLevel
 
-> 设置日志等级。
+> 设置项目级日志等级。
 
 示例:
 
@@ -84,7 +84,7 @@ setLogLevel(level)
 
 ### setLogDebug
 
-> 设置日志等级。
+> 设置项目级日志debug级别日志开关。
 
 示例:
 
@@ -126,7 +126,9 @@ log = Logger("test_log")
 |:---|---|---|
 |name|STRING|日志模块名|
 
-#### debug 打印debug级别日志
+#### debug
+
+> 打印debug级别日志
 
 示例:
 
@@ -145,7 +147,9 @@ log.debug("debug log")
 
 无
 
-#### info 打印info级别日志
+#### info
+
+> 打印info级别日志
 
 示例:
 
@@ -164,7 +168,9 @@ log.info("info log")
 
 无
 
-#### warn 打印warn级别日志
+#### warn
+
+> 打印warn级别日志
 
 示例:
 
@@ -183,7 +189,9 @@ log.warn("warn log")
 
 无
 
-#### error 打印error级别日志
+#### error
+
+> 打印error级别日志
 
 示例:
 
@@ -202,7 +210,9 @@ log.error("error log")
 
 无
 
-#### critical 打印critical级别日志
+#### critical
+
+> 打印critical级别日志
 
 示例:
 
@@ -226,9 +236,6 @@ log.critical("critical log")
 ```python
 from logging import getLogger, setLogLevel, setLogDebug, setLogSave
 
-# 模块初始化
-log = getLogger("test_log")
-
 # 设置debug日志开关, 默认开
 debug = True
 setLogDebug(debug)
@@ -247,6 +254,9 @@ size = 4096
 backups = 5
 setLogSave(save, path, name, size, backups)
 # True
+
+# 模块初始化
+log = getLogger("test_log")
 
 # 打印不同等级日志
 log.debug("debug log")
