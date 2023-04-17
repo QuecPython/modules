@@ -40,14 +40,13 @@ RPC_REQUEST_TOPIC = 'v1/devices/me/rpc/request/'
 
 class TBDeviceMQTTClient:
 
-    def __init__(self, host, port=1883, username=None, password="", qos=0, client_id="", chunk_size=0):
+    def __init__(self, host, port=1883, username=None, password="", qos=0, client_id=""):
         self.__host = host
         self.__port = port
         self.__username = username
         self.__password = password
         self.__qos = qos
         self.__client_id = client_id
-        self.__chunk_size = chunk_size
         self.__mqtt = None
         self.__callback = print
         self.__status = False
