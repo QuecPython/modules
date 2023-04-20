@@ -148,6 +148,13 @@ cloud.set_callback(cloud_callback)
 |:---|---|---|
 |callback|function|用于接收服务端下发的数据信息,<br>函数入参`args`, 数据格式`(topic, data)`|
 
+**回调函数参数:**
+
+|参数|类型|说明|
+|:---|---|---|
+|topic|str|接收消息的topic|
+|data|dict/str|服务端下发的具体数据|
+
 **返回值:**
 
 无
