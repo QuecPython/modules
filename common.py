@@ -261,13 +261,14 @@ class Event(object):
         self.cond = Condition()
 
     def wait(self):
-        self.cond.wait()
+        if self.flag is not True:
+            self.cond.wait()
         return self.flag
 
     def set(self):
         with self.__lock:
             self.flag = True
-            self.cond.notify()
+            self.cond.notify_all()
 
     def clear(self):
         with self.__lock:
