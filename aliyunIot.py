@@ -447,7 +447,7 @@ class AliYunOTA:
     def __start_sota(self):
         log.debug("__start_sota")
         app_fota_obj = app_fota.new()
-        download_infos = [{"url": i["url"], "file_name": i["file_name"]} for i in self.__files]
+        download_infos = [{"url": i["url"], "file_name": i["name"]} for i in self.__files]
         bulk_download_res = app_fota_obj.bulk_download(download_infos)
         log.debug("first bulk_download_res: %s" % str(bulk_download_res))
         count = 0
