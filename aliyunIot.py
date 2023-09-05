@@ -15,7 +15,7 @@
 """
 @file      :aliyunIot.py
 @author    :Jack Sun (jack.sun@quectel.com)
-@brief     :Aliyun cloud mqtt client.
+@brief     :Aliyun server mqtt client.
 @version   :1.2.0
 @date      :2022-11-24 17:06:30
 @copyright :Copyright (c) 2022
@@ -55,7 +55,7 @@ FOTA_ERROR_CODE = {
 }
 
 
-class AliYunIot:
+class AliIot:
 
     def __init__(self, product_key=None, device_name=None, device_secret=None, product_secret=None,
                  server="iot-as-mqtt.cn-shanghai.aliyuncs.com", qos=1):
@@ -65,7 +65,7 @@ class AliYunIot:
         self.__device_secret = device_secret
         self.__domain = server
         self.__qos = qos
-        self.__cloud = None
+        self.__server = None
         self.__id_lock = _thread.allocate_lock()
         self.__get_post_lock = _thread.allocate_lock()
         self.__callback = None
@@ -148,7 +148,7 @@ class AliYunIot:
             self.__callback((topic, data))
 
     def __subscribe_topic(self, topic):
-        subscribe_res = self.__cloud.subscribe(topic, qos=self.__qos) if self.__cloud else -1
+        subscribe_res = self.__server.subscribe(topic, qos=self.__qos) if self.__server else -1
         log.debug("subscribe_topic %s %s" % (topic, "success" if subscribe_res == 0 else "falied"))
         return True if subscribe_res == 0 else False
 
@@ -185,7 +185,7 @@ class AliYunIot:
     @property
     def status(self):
         try:
-            _status = self.__cloud.getAliyunSta() if self.__cloud else -1
+            _status = self.__server.getAliyunSta() if self.__server else -1
             log.debug("getAliyunSta: %s" % _status)
             return True if _status == 0 else False
         except Exception as e:
@@ -225,25 +225,25 @@ class AliYunIot:
         log.debug("self.__device_name: %s" % self.__device_name)
         log.debug("self.__device_secret: %s" % self.__device_secret)
         log.debug("self.__server: %s" % self.__server)
-        self.__cloud = aLiYun(self.__product_key, self.__product_secret, self.__device_name, self.__device_secret, self.__server)
-        res = self.__cloud.setMqtt(self.__device_name)
+        self.__server = aLiYun(self.__product_key, self.__product_secret, self.__device_name, self.__device_secret, self.__server)
+        res = self.__server.setMqtt(self.__device_name)
         if res == 0:
-            self.__cloud.setCallback(self.__subscribe_callback)
+            self.__server.setCallback(self.__subscribe_callback)
             res = self.__subscribe_topics()
             if res == 0:
-                self.__cloud.start()
+                self.__server.start()
         return res
 
     def disconnect(self):
         """Aliyun disconnect"""
         try:
-            if self.__cloud:
-                self.__cloud.disconnect()
+            if self.__server:
+                self.__server.disconnect()
         except Exception as e:
             sys.print_exception(e)
             log.error("Ali disconnect falied. %s" % e)
         finally:
-            self.__cloud = None
+            self.__server = None
         return True
 
     def properties_report(self, data):
@@ -259,7 +259,7 @@ class AliYunIot:
             "params": params,
             "method": "thing.event.property.post",
         }
-        pub_res = self.__cloud.publish(self.ica_topic_property_post, ujson.dumps(properties), qos=self.__qos) if self.__cloud else -1
+        pub_res = self.__server.publish(self.ica_topic_property_post, ujson.dumps(properties), qos=self.__qos) if self.__server else -1
         return self.__get_post_res(_id) if pub_res is True else False
 
     def event_report(self, event, data):
@@ -275,7 +275,7 @@ class AliYunIot:
             "params": params,
             "method": "thing.event.%s.post" % event,
         }
-        pub_res = self.__cloud.publish(self.ica_topic_event_post.format(event), ujson.dumps(properties), qos=self.__qos) if self.__cloud else -1
+        pub_res = self.__server.publish(self.ica_topic_event_post.format(event), ujson.dumps(properties), qos=self.__qos) if self.__server else -1
         return self.__get_post_res(_id) if pub_res is True else False
 
     def service_response(self, service, code, data, msg_id, message):
@@ -286,7 +286,7 @@ class AliYunIot:
             "message": message,
             "version": "1.0",
         }
-        return self.__cloud.publish(self.ica_topic_service_pub_reply.format(service), ujson.dumps(pub_data), qos=self.__qos) if self.__cloud else False
+        return self.__server.publish(self.ica_topic_service_pub_reply.format(service), ujson.dumps(pub_data), qos=self.__qos) if self.__server else False
 
     def rrpc_response(self, msg_id, data):
         """Publish rrpc response
@@ -300,7 +300,7 @@ class AliYunIot:
             False: Failed
         """
         pub_data = ujson.dumps(data) if isinstance(data, dict) else data
-        return self.__cloud.publish(self.rrpc_topic_response.format(msg_id), pub_data, qos=self.__qos) if self.__cloud else False
+        return self.__server.publish(self.rrpc_topic_response.format(msg_id), pub_data, qos=self.__qos) if self.__server else False
 
     def property_set_reply(self, msg_id, code, msg):
         data = {
@@ -310,7 +310,7 @@ class AliYunIot:
             "message": msg,
             "version": "1.0"
         }
-        return self.__cloud.publish(self.ica_topic_property_set_reply, ujson.dumps(data), qos=self.__qos) if self.__cloud else False
+        return self.__server.publish(self.ica_topic_property_set_reply, ujson.dumps(data), qos=self.__qos) if self.__server else False
 
     def ota_device_inform(self, version, module):
         _id = self.__id
@@ -321,7 +321,7 @@ class AliYunIot:
                 "module": module
             }
         }
-        return self.__cloud.publish(self.ota_topic_device_inform, ujson.dumps(publish_data), qos=self.__qos) if self.__cloud else False
+        return self.__server.publish(self.ota_topic_device_inform, ujson.dumps(publish_data), qos=self.__qos) if self.__server else False
 
     def ota_firmware_get(self, module):
         _id = self.__id
@@ -333,7 +333,7 @@ class AliYunIot:
             },
             "method": "thing.ota.firmware.get"
         }
-        publish_res = self.__cloud.publish(self.ota_topic_firmware_get, ujson.dumps(publish_data), qos=self.__qos) if self.__cloud else False
+        publish_res = self.__server.publish(self.ota_topic_firmware_get, ujson.dumps(publish_data), qos=self.__qos) if self.__server else False
         log.debug("module: %s, publish_res: %s" % (module, publish_res))
         return self.__get_post_res(_id) if publish_res else False
 
@@ -347,10 +347,10 @@ class AliYunIot:
                 "module": module,
             }
         }
-        return self.__cloud.publish(self.ota_topic_device_progress, ujson.dumps(publish_data), qos=self.__qos) if self.__cloud else False
+        return self.__server.publish(self.ota_topic_device_progress, ujson.dumps(publish_data), qos=self.__qos) if self.__server else False
 
 
-class AliYunOTA:
+class AliIotOTA:
 
     def __init__(self, project_name, firmware_name):
         self.__project_name = project_name
@@ -359,12 +359,12 @@ class AliYunOTA:
         self.__version = None
         self.__files = []
         self.__ota_timer = osTimer()
-        self.__cloud = None
+        self.__server = None
         self.__fota_queue = Queue()
 
-    def set_cloud(self, cloud):
-        if isinstance(cloud, AliYunIot):
-            self.__cloud = cloud
+    def set_server(self, server):
+        if isinstance(server, AliIot):
+            self.__server = server
 
     def set_ota_data(self, data):
         self.__module = data.get("module")
@@ -419,7 +419,7 @@ class AliYunOTA:
             self.__ota_timer.stop()
             return fota_res
         else:
-            self.__cloud.ota_device_progress(-2, "Download File Failed.", module=self.__module)
+            self.__server.ota_device_progress(-2, "Download File Failed.", module=self.__module)
             return False
 
     def __fota_callback(self, args):
@@ -428,20 +428,20 @@ class AliYunOTA:
         if down_status in (0, 1):
             log.debug("DownStatus: %s [%s][%s%%]" % (down_status, "=" * down_process, down_process))
             if down_process < 100:
-                self.__cloud.ota_device_progress(down_process, "Downloading File.", module=self.__module)
+                self.__server.ota_device_progress(down_process, "Downloading File.", module=self.__module)
             else:
-                self.__cloud.ota_device_progress(100, "Download File Over.", module=self.__module)
+                self.__server.ota_device_progress(100, "Download File Over.", module=self.__module)
                 self.__fota_queue.put(True)
         elif down_status == 2:
-            self.__cloud.ota_device_progress(100, "Download File Over.", module=self.__module)
+            self.__server.ota_device_progress(100, "Download File Over.", module=self.__module)
             self.__fota_queue.put(True)
         else:
             log.error("Down Failed. Error Code [%s] %s" % (down_process, FOTA_ERROR_CODE.get(down_process, down_process)))
-            self.__cloud.ota_device_progress(-2, FOTA_ERROR_CODE.get(down_process, down_process), module=self.__module)
+            self.__server.ota_device_progress(-2, FOTA_ERROR_CODE.get(down_process, down_process), module=self.__module)
             self.__fota_queue.put(False)
 
     def __ota_timer_callback(self, args):
-        self.__cloud.ota_device_progress(-1, "Download File Falied.", module=self.__module)
+        self.__server.ota_device_progress(-1, "Download File Falied.", module=self.__module)
         self.__fota_queue.put(False)
 
     def __start_sota(self):
@@ -459,9 +459,9 @@ class AliYunOTA:
             if count > 3 and bulk_download_res:
                 break
         if not bulk_download_res:
-            self.__cloud.ota_device_progress(100, "Download File Over.", module=self.__module)
+            self.__server.ota_device_progress(100, "Download File Over.", module=self.__module)
             app_fota_obj.set_update_flag()
             return True
         else:
-            self.__cloud.ota_device_progress(-2, "Download File Failed.", module=self.__module)
+            self.__server.ota_device_progress(-2, "Download File Failed.", module=self.__module)
             return False

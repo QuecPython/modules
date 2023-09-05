@@ -18,7 +18,7 @@
 """
 @file      :thingsboard.py
 @author    :Jack Sun (jack.sun@quectel.com)
-@brief     :ThingsBoard cloud mqtt client.
+@brief     :ThingsBoard server mqtt client.
 @version   :1.2.0
 @date      :2022-09-14 11:04:03
 @copyright :Copyright (c) 2022
