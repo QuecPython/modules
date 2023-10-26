@@ -231,7 +231,6 @@ class GNSSPower:
     """
 
     def __init__(self, PowerPin, StandbyPin, BackupPin):
-        log.debug("GNSSPower __init__")
         self.__pw = {
             "power": {
                 "pin": PowerPin,
@@ -306,7 +305,6 @@ class GNSSBase(GNSSPower):
     """This class is GNSS module base class."""
 
     def __init__(self, PowerPin, StandbyPin, BackupPin):
-        log.debug("GNSSBase __init__")
         super().__init__(PowerPin, StandbyPin, BackupPin)
         self.__nmea_parse = NMEAParse()
         self.__running = 0
@@ -422,7 +420,6 @@ class GNSSInternal(GNSSBase):
     """This class is for internal gnss."""
 
     def __init__(self, PowerPin, StandbyPin, BackupPin):
-        log.debug("GNSSInternal __init__")
         super().__init__(PowerPin, StandbyPin, BackupPin)
         assert quecgnss is not None, "quecgnss is not supported."
         assert quecgnss.init() == 0, "quecgnss init failed"
@@ -463,7 +460,6 @@ class GNSSExternal(GNSSBase):
     """This class is for external gnss."""
 
     def __init__(self, UARTn, buadrate, databits, parity, stopbits, flowctl, PowerPin, StandbyPin, BackupPin):
-        log.debug("GNSSExternal __init__")
         super().__init__(PowerPin, StandbyPin, BackupPin)
         self.__uart_args = (UARTn, buadrate, databits, parity, stopbits, flowctl)
         self.__gnss = None

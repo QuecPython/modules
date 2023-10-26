@@ -106,7 +106,7 @@ class PowerManage:
         Returns:
             bool: True - success. False - failed.
         """
-        return True if hasattr(pm, "autosleep") and val in (0, 1) and pm.autosleep(val) == 0 else False
+        return (hasattr(pm, "autosleep") and val in (0, 1) and pm.autosleep(val) == 0)
 
     def set_psm(self, mode=1, tau=None, act=None):
         """Set device psm.
@@ -141,4 +141,4 @@ class PowerManage:
         Returns:
             bool: True - success. False - failed.
         """
-        return True if hasattr(pm, "Forcehib") and pm.Forcehib() == 0 else False
+        return (hasattr(pm, "Forcehib") and pm.Forcehib() == 0)
