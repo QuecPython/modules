@@ -12,21 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# !/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """
 @file      :logging.py
 @author    :Jack Sun (jack.sun@quectel.com)
 @brief     :Log management.
 @version   :1.2.0
-@date      :2022-11-24 17:06:30
+@date      :2023-03-22 09:46:51
 @copyright :Copyright (c) 2022
 """
 
-import uos
-import utime
+import sys
 import ql_fs
 import _thread
-import usys as sys
+import uos as os
+from machine import UART, RTC
 
+_RTC_ = RTC()
 _LOG_LOCK = _thread.allocate_lock()
 _LOG_LEVEL_CODE = {
     "debug": 0,
@@ -45,24 +49,23 @@ _log_size = 0x2000
 _log_back = 8
 _log_level = "debug"
 _log_debug = True
+_log_stream = sys.stdout
 
 
 class Logger:
-    """This class is for show log message."""
     def __init__(self, name):
         self.__name = name
 
-    def __save_log(self, msg):
-        """Save log message to local file.
+    def __date_time(self):
+        _datetime_ = _RTC_.datetime()
+        return _datetime_[:3] + _datetime_[4:7]
 
-        Args:
-            msg (str): log message.
-        """
+    def __save_log(self, msg):
         global _log_path, _log_file
         try:
             log_size = 0
             if not ql_fs.path_exists(_log_path):
-                uos.mkdir(_log_path[:-1])
+                os.mkdir(_log_path[:-1])
             if ql_fs.path_exists(_log_file):
                 log_size = ql_fs.path_getsize(_log_file)
                 if log_size + len(msg) >= _log_size:
@@ -70,123 +73,66 @@ class Logger:
                         bak_file = _log_file + "." + str(i)
                         if ql_fs.path_exists(bak_file):
                             if i == _log_back:
-                                uos.remove(bak_file)
+                                os.remove(bak_file)
                             else:
-                                uos.rename(bak_file, _log_file + "." + str(i + 1))
-                    uos.rename(_log_file, _log_file + ".1")
+                                os.rename(bak_file, _log_file + "." + str(i + 1))
+                    os.rename(_log_file, _log_file + ".1")
             with open(_log_file, "a") as lf:
                 lf.write(msg)
         except Exception as e:
             sys.print_exception(e)
 
     def __log(self, level, *message):
-        """Show log message to screen.
-
-        Args:
-            level (str): level name.
-            message (tuple): message items.
-        """
-        global _log_save
+        global _log_save, _log_stream
         with _LOG_LOCK:
             if _log_debug is False:
                 if _log_level == "debug" and level == "debug":
                     return
                 if _LOG_LEVEL_CODE.get(level) < _LOG_LEVEL_CODE.get(_log_level):
                     return
-
-            _time = "{}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}".format(*utime.localtime())
+            _time = "{}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}".format(*self.__date_time())
             msg = "[{}][{}][{}]".format(_time, self.__name, level)
-            print(msg, *message)
+            print(msg, *message, file=_log_stream)
             if _log_save:
-                msg = (msg + " " + " ".join(message)) if message else msg
+                message = [str(message) for i in message if not isinstance(message, str)]
+                msg = msg + " " + " ".join(message) if message else msg
                 self.__save_log(msg)
 
     def critical(self, *message):
-        """Show critical level log.
-
-        Args:
-            message (tuple): message items.
-        """
         self.__log("critical", *message)
 
     def error(self, *message):
-        """Show error level log.
-
-        Args:
-            message (tuple): message items.
-        """
         self.__log("error", *message)
 
     def warn(self, *message):
-        """Show warn level log.
-
-        Args:
-            message (tuple): message items.
-        """
         self.__log("warn", *message)
 
     def info(self, *message):
-        """Show info level log.
-
-        Args:
-            message (tuple): message items.
-        """
         self.__log("info", *message)
 
     def debug(self, *message):
-        """Show debug level log.
-
-        Args:
-            message (tuple): message items.
-        """
         self.__log("debug", *message)
 
 
 def getLogger(name):
-    """Get Logger object by name.
-
-    Args:
-        name (str): log object name, default use file name.
-
-    Returns:
-        object: Logger object.
-    """
     global _log_dict
     if not _log_dict.get(name):
         _log_dict[name] = Logger(name)
     return _log_dict[name]
 
 
-def setLogSave(save, path, name, size=None, backups=None):
-    """Set project log save onff, file size, backup file counts.
-
-    [description]
-
-    Args:
-        save (bool): True - save log to file, False - not save log to file.
-        path (str): Log file path.
-        name (str): Log file name.
-        size (int): Log file max size. (default: `None`)
-        backups (int): Log file max backup count. (default: `None`)
-
-    Returns:
-        tuple: set result.
-            (result code, result message)
-            result code:
-                0 - success.
-                1 - save args error.
-                2 - size args error.
-                3 - backups args error.
-            result message:
-                error message.
-    """
-    global _log_save, _log_path, _log_name, _log_file, _log_size, _log_back
+def setLogFile(path, name):
+    global _log_path, _log_name, _log_file
     if not path.endswith("/"):
         path += "/"
     _log_path = path
     _log_name = name
     _log_file = _log_path + _log_name
+    return 0
 
+
+def setSaveLog(save, size=None, backups=None):
+    global _log_save, _log_size, _log_back
     if not isinstance(save, bool):
         return (1, "save is not bool.")
     _log_save = save
@@ -201,14 +147,6 @@ def setLogSave(save, path, name, size=None, backups=None):
 
 
 def setLogLevel(level):
-    """Set project log level.
-
-    Args:
-        level (str): Log level.
-
-    Returns:
-        bool: True - success, False - failed.
-    """
     global _log_level
     level = level.lower()
     if level not in _LOG_LEVEL_CODE.keys():
@@ -218,16 +156,16 @@ def setLogLevel(level):
 
 
 def setLogDebug(debug):
-    """Set project log debug.
-
-    Args:
-        debug (bool): Log debug.
-
-    Returns:
-        bool: True - success, False - failed.
-    """
     global _log_debug
     if isinstance(debug, bool):
         _log_debug = debug
+        return True
+    return False
+
+
+def setLogSteam(out):
+    global _log_stream
+    if isinstance(out, UART) or out in (sys.stdout, sys.stderr):
+        _log_stream = out
         return True
     return False
