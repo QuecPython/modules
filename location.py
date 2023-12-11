@@ -40,7 +40,7 @@ try:
 except ImportError:
     wifilocator = None
 
-from machine import UART, Pin
+from machine import UART, Pin, I2C
 
 from usr.modules.logging import getLogger
 
@@ -304,7 +304,7 @@ class GNSSPower:
 class GNSSBase(GNSSPower):
     """This class is GNSS module base class."""
 
-    def __init__(self, PowerPin, StandbyPin, BackupPin):
+    def __init__(self, PowerPin=None, StandbyPin=None, BackupPin=None):
         super().__init__(PowerPin, StandbyPin, BackupPin)
         self.__nmea_parse = NMEAParse()
         self.__running = 0
@@ -325,7 +325,10 @@ class GNSSBase(GNSSPower):
             "satellites": "",
         }
         self.__hist_locs = []
+        self.__hist_size = 10
+        self.__current_nmea = b""
         self.__trans = 0
+        self.__trans_output = print
 
     def _open(self):
         """Open gnss."""
@@ -348,7 +351,8 @@ class GNSSBase(GNSSPower):
         if not gps_data:
             return
         if self.__trans:
-            print(gps_data)
+            self.__trans_output(gps_data)
+        self.__current_nmea = gps_data
         self.__nmea_parse.set_gps_data(gps_data)
         rmc_data = self.__nmea_parse.GxRMCData
         if rmc_data and rmc_data[2] == "A":
@@ -369,18 +373,29 @@ class GNSSBase(GNSSPower):
                 gsv_data = self.__nmea_parse.GxGSVData
                 self.__current_loc["satellites"] = gsv_data[3]
 
-        if len(self.__hist_locs) >= 10:
+        if len(self.__hist_locs) >= self.__hist_size:
             self.__hist_locs.pop(0)
         self.__hist_locs.append(self.__current_loc)
 
-    def set_trans(self, mode):
+    def set_trans(self, mode, output=print):
         """Set transparent tag for weather to print gnss nmae or not.
 
         Args:
             mode (int): 0 - disable, 1 - enable.
         """
         assert mode in (0, 1), "transparent mode must be 0 or 1."
+        assert callable(output), "output must be callable."
         self.__trans = mode
+        self.__trans_output = output
+
+    def set_back_size(self, size):
+        """Set history location data backup size.
+
+        Args:
+            size(int): History location data backup size.
+        """
+        assert isinstance(size, int) and size > 0, "History location data size must be int and larger than 0."
+        self.__hist_size = size
 
     def read(self, mode=0):
         """Read gnss data.
@@ -392,7 +407,7 @@ class GNSSBase(GNSSPower):
             dict/list: location data.
         """
         with self.__lock:
-            return self.__current_loc if mode == 0 else self.__hist_locs
+            return self.__current_loc if mode == 0 else (self.__hist_locs if mode == 1 else self.__current_nmea)
 
     def start(self):
         """Start a thread for reading and parsing gnss nmea data.
@@ -419,8 +434,8 @@ class GNSSBase(GNSSPower):
 class GNSSInternal(GNSSBase):
     """This class is for internal gnss."""
 
-    def __init__(self, PowerPin, StandbyPin, BackupPin):
-        super().__init__(PowerPin, StandbyPin, BackupPin)
+    def __init__(self):
+        super().__init__()
         assert quecgnss is not None, "quecgnss is not supported."
         assert quecgnss.init() == 0, "quecgnss init failed"
         self._close()
@@ -456,7 +471,7 @@ class GNSSInternal(GNSSBase):
         log.debug("__internal_read stop.")
 
 
-class GNSSExternal(GNSSBase):
+class GNSSExternalUART(GNSSBase):
     """This class is for external gnss."""
 
     def __init__(self, UARTn, buadrate, databits, parity, stopbits, flowctl, PowerPin, StandbyPin, BackupPin):
@@ -475,7 +490,7 @@ class GNSSExternal(GNSSBase):
 
     def _receive(self):
         """Thread for reading and parsing gnss nmea data."""
-        log.debug("GNSSExternal _receive start.")
+        log.debug("GNSSExternalUART _receive start.")
         self.__running_end = 1
         self._open()
         while self.__running:
@@ -485,26 +500,71 @@ class GNSSExternal(GNSSBase):
         self._close()
         self.__tid = None
         self.__running_end = 0
-        log.debug("GNSSExternal _receive stop.")
+        log.debug("GNSSExternalUART _receive stop.")
+
+
+class GNSSExternalI2C(GNSSBase):
+
+    def __init__(self, I2Cn, i2cmode, slaveaddress, addr, addr_len, PowerPin, StandbyPin, BackupPin):
+        super().__init__(PowerPin, StandbyPin, BackupPin)
+        self.__gnss = I2C(I2Cn, i2cmode)
+        self.slaveaddress = slaveaddress
+        self.addr = addr
+        self.addr_len = addr_len
+        self.source_data = b""
+
+    def _receive(self):
+        log.debug("GNSSExternalI2C _receive start.")
+        self.__running_end = 1
+        self._open()
+        recv_size = 1024
+        nmea_data = bytearray([])
+        while self.__running:
+            recv_data = bytearray(recv_size)
+            self.__gnss.read(self.slaveaddress, self.addr, self.addr_len, recv_data, recv_size, 0)
+            nmea_data.extend(recv_data)
+            nmea_data = self._parse_loc(nmea_data)
+            utime.sleep_ms(500)
+        self._close()
+        self.__tid = None
+        self.__running_end = 0
+        log.debug("GNSSExternalI2C _receive stop.")
+
+    def _parse_loc(self, data):
+        gps_data = bytearray([])
+        for i in data:
+            if i != 0x00:
+                gps_data.append(i)
+            else:
+                if gps_data:
+                    super()._parse_loc(bytes(gps_data))
+                    gps_data = bytearray([])
+        return gps_data
 
 
 class GNSS:
-    """This class is GNSS module, return GNSSInternal or GNSSExternal by checking gps mode args."""
+    """This class is GNSS module, return GNSSInternal or GNSSExternalUART by checking gps mode args."""
 
-    class _GPS_MODE_:
+    class GPS_MODE:
         internal = 0x1
-        external = 0x2
+        external_uart = 0x2
+        external_i2c = 0x3
 
     def __new__(cls, *args, **kwargs):
-        if kwargs.get("gps_mode") == cls._GPS_MODE_.internal:
-            return GNSSInternal(kwargs.get("PowerPin"), kwargs.get("StandbyPin"), kwargs.get("BackupPin"))
-        elif kwargs.get("gps_mode") == cls._GPS_MODE_.external:
-            return GNSSExternal(
+        if kwargs.get("gps_mode") == cls.GPS_MODE.internal:
+            return GNSSInternal()
+        elif kwargs.get("gps_mode") == cls.GPS_MODE.external_uart:
+            return GNSSExternalUART(
                 kwargs.get("UARTn"), kwargs.get("buadrate"), kwargs.get("databits"), kwargs.get("parity"), kwargs.get("stopbits"), kwargs.get("flowctl"),
                 kwargs.get("PowerPin"), kwargs.get("StandbyPin"), kwargs.get("BackupPin")
             )
+        elif kwargs.get("gps_mode") == cls.GPS_MODE.external_i2c:
+            return GNSSExternalI2C(
+                kwargs.get("I2Cn"), kwargs.get("i2cmode"), kwargs.get("slaveaddress"), kwargs.get("addr"), kwargs.get("addr_len"),
+                kwargs.get("PowerPin"), kwargs.get("StandbyPin"), kwargs.get("BackupPin")
+            )
         else:
-            return super(GNSS, cls).__new__(cls)
+            raise ValueError("Args gps_mode is not compare.")
 
 
 class CellLocator:
