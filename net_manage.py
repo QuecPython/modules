@@ -84,7 +84,7 @@ class NetManage:
         Returns:
             tuple: (3, 1) - success, other - failed.
         """
-        return self.__checknet.wait_network_connected(timeout)
+        return self.__checknet.waitNetworkReady(timeout)
 
     def connect(self):
         """Set net connect.
