@@ -93,7 +93,7 @@ nmea_parse.set_gps_data(gps_data)
 
 |参数|类型|说明|
 |:---|---|---|
-|data|str|NMEA明码语句|
+|data|str/bytes|NMEA明码语句|
 
 **返回值:**
 
@@ -431,25 +431,45 @@ nmea_parse.Speed
 
 ### GNSS
 
-> 读取GNSS模块(内置/外置)有效NMEA明码语句.
+> 读取GNSS模块有效NMEA明码语句, 支持模组内置GNSS模块, 外挂GNSS模块, 外挂GNSS模块支持串口或I2C接口读取NMEA数据。
 
 #### 实例化对象
 
 **示例:**
 
 ```python
-from machine import UART
+from machine import UART, I2C
 from location import GNSS
 
+# 实例化模组内置GNSS模块
 gps_cfg = {
+    "gps_mode": GNSS.GPS_MODE.internal,
+}
+gnss = GNSS(**gps_cfg)
+
+# 实例化外挂GNSS模块, 使用串口进行NMEA数据读取
+gps_cfg = {
+    "gps_mode": GNSS.GPS_MODE.external_uart,
     "UARTn": UART.UART1,
     "buadrate": 115200,
     "databits": 8,
     "parity": 0,
     "stopbits": 1,
     "flowctl": 0,
-    "gps_mode": 2,
-    "nmea": 0b010111,
+    "PowerPin": None,
+    "StandbyPin": None,
+    "BackupPin": None,
+}
+gnss = GNSS(**gps_cfg)
+
+# 实例化外挂GNSS模块, 使用I2C进行NMEA数据读取
+gps_cfg = {
+    "gps_mode": GNSS.GPS_MODE.external_i2c,
+    "I2Cn": I2C.I2C1,
+    "i2cmode": I2C.STANDARD_MODE,
+    "slaveaddress": 0x55,
+    "addr": bytearray([0x00]),
+    "addr_len": 1,
     "PowerPin": None,
     "StandbyPin": None,
     "BackupPin": None,
@@ -461,17 +481,80 @@ gnss = GNSS(**gps_cfg)
 
 |参数|类型|说明|
 |:---|---|---|
+|gps_mode|int|1 - 内置GPS, 2 - 外置GPS UART通信, 3 - 外置GPS I2C通信|
 |UARTn|int|UART串口号|
 |buadrate|int|波特率, 常用波特率都支持, 如4800、9600、19200、38400、57600、115200、230400等|
 |databits|int|数据位（5 ~ 8）, 展锐平台当前仅支持8位|
 |parity|int|奇偶校验（0 – NONE, 1 – EVEN, 2 - ODD）|
 |stopbits|int|停止位（1 ~ 2）|
 |flowctl|int|硬件控制流（0 – FC_NONE,  1 – FC_HW）|
-|gps_mode|int|1 - 内置GPS, 2 - 外置GPS|
-|nmea|int|按位标识需要匹配的NMEA项<br>0b000001 - RMC<br>0b000010 - GGA<br>0b000100 - GSV<br>0b001000 - GSA<br>0b010000 - VTG<br>0b100000 - GLL|
+|I2Cn|int|I2C 通路索引号|
+|i2cmode|int|I2C 的工作模式|
+|slaveaddress|int| I2C 设备地址，int类型，传入七位设备地址即可，低位自动补1|
+|addr|int| I2C I2C 寄存器地址，bytearray类型。|
+|addr_len|int| 寄存器地址长度，int类型。|
 |PowerPin|int|Power Pin对象|
 |StandbyPin|int|Standby模式Pin对象|
 |BackupPin|int|Backup模式Pin对象|
+
+#### set_trans
+
+> 设置NMEA原始数据透传打印使能, 透传功能默认关闭。**默认透传到标准输出**。
+
+**示例:**
+
+```python
+gnss.set_trans(1, print)
+```
+
+**参数:**
+
+|参数|类型|说明|
+|:---|---|---|
+|mode|int|0 - 关闭透传打印, 1 - 开启透传打印|
+|output|fun|透传方式, 默认`print`方法, 也可使用其他方法进行透传, 如串口, 回调等|
+
+#### set_back_size
+
+> 设置历史定位数据备份数量, 默认10。
+
+**示例:**
+
+```python
+gnss.set_back_size(20)
+```
+
+**参数:**
+
+|参数|类型|说明|
+|:---|---|---|
+|size|int|历史定位数据备份数量|
+
+#### start
+
+> 开始GNSS模块NMEA数据读取与解析
+
+**示例:**
+
+```python
+gnss.start()
+```
+
+**返回值:**
+
+|数据类型|说明|
+|:---|---|
+|bool|True - 成功, False - 失败|
+
+#### stop
+
+> 停止GNSS模块NMEA数据读取与解析
+
+**示例:**
+
+```python
+gnss.stop()
+```
 
 #### read
 
@@ -480,9 +563,19 @@ gnss = GNSS(**gps_cfg)
 **示例:**
 
 ```python
-retry = 10
-gps_data = gnss.read(retry=retry)
-print(gps_data)
+# 读取格式化后当前最新GNSS定位数据
+current_gps_data = gnss.read(mode=0)
+print(current_gps_data)
+# {'speed': '0.0', 'state': 'A', 'lng': '117.11553485', 'course': '000.00', 'satellites': '08', 'altitude': '94.6', 'lat_dir': 'N', 'datestamp': '081223', 'timestamp': '062555.000', 'lng_dir': 'E', 'lat': '31.8216808'}
+
+# 读取格式化后历史GNSS定位数据
+history_gps_data = gnss.read(mode=1)
+print(history_gps_data)
+# [{'speed': '0.0', 'state': 'A', 'lng': '117.11553485', 'course': '000.00', 'satellites': '08', 'altitude': '94.6', 'lat_dir': 'N', 'datestamp': '081223', 'timestamp': '062554.000', 'lng_dir': 'E', 'lat': '31.82168078333333'},{'speed': '0.0', 'state': 'A', 'lng': '117.11553485', 'course': '000.00', 'satellites': '08', 'altitude': '94.6', 'lat_dir': 'N', 'datestamp': '081223', 'timestamp': '062555.000', 'lng_dir': 'E', 'lat': '31.8216808'},]
+
+# 读取最近一包GNSS原始NMEA定位数据
+nmea_data = gnss.read(mode=2)
+print(nmea_data)
 # $GNGLL,3149.333010,N,11706.927563,E,064758.000,A,A*4F
 # $BDGSV,5,5,17,11,04,276,,1*44
 # $BDGSV,5,4,17,19,24,059,,05,18,251,,21,16,172,,25,15,312,21,1*7A
@@ -505,13 +598,15 @@ print(gps_data)
 
 |参数|类型|说明|
 |:---|---|---|
-|retry|int|GPS位置信息读取重试次数, 默认100|
+|mode|int|返回不同类型定位数据，默认0。 枚举值如下:<br>0 - 格式化后当前最新GNSS定位数据<br>1 - 格式化后历史GNSS定位数据, 最多存储10包历史数据<br>2 - 最近一包GNSS原始NMEA定位数据。|
 
 **返回值:**
 
 |数据类型|说明|
 |:---|---|
-|str|GPS NMEA明码语句|
+|dict|当前最新GNSS定位数据的常用定位数据信息, 如需调整, 可调整`GNSSBase._parse_loc`方法进行其他定位数据的新增<br>定位数据项:<br>state - 定位状态(A - 有效定位, V - 无效定位)<br>lng - 经度<br>lng_dir - 经度方向(E - 东, W - 西)<br>lat - 纬度<br>lat_dir - 纬度方向(N - 北, S - 南)<br>speed - 速度(单位: km/h)<br>course - 地面航向(单位: 度, 以真北为参考基)<br>datestamp - 日期(DDMMYY)<br>datestamp - 时间(HHmmSS.000), UTC时间<br>altitude - 海拔<br>satellites - 可见卫星的总数|
+|list|历史GNSS定位数据的常用定位数据信息, 只存储最近10条数据|
+|bytes|最近一包GNSS原始NMEA定位数据|
 
 ### CellLocator
 
@@ -610,6 +705,7 @@ wifi.read()
 ## 使用说明
 
 ```python
+import utime
 from location import CoordinateSystemConvert, NMEAParse, GNSS, CellLocator, WiFiLocator
 
 # 坐标转换模块初始化
@@ -627,28 +723,35 @@ gps_cfg = {
     "stopbits": 1,
     "flowctl": 0,
     "gps_mode": 2,
-    "nmea": 0b010111,
     "PowerPin": None,
     "StandbyPin": None,
     "BackupPin": None,
 }
 gnss = GNSS(**gps_cfg)
 
-# 读取GNSS元素数据
-retry = 300
-gps_data = gnss.read(retry=retry)
+# 启动GNSS数据读取解析
+gnss.start()
 
-# 解析GNSS原始数据
-nmea_parse.set_gps_data(gps_data)
+# 读取GNSS定位数据
+while True:
+    gps_data = gnss.read(mode=0)
+    utime.sleep(1)
 
-# 获取坐标信息
-lng = nmea_parse.Longitude
-lat = nmea_parse.Latitude
-altitude = nmea_parse.Altitude
-speed = nmea_parse.Speed
+# 读取GNSS原始NMEA定位数据进行解析
+while True:
+    nmea_data = gnss.read(mode=2)
+    # 解析GNSS原始数据
+    nmea_parse.set_gps_data(gps_data)
 
-# 转换坐标系
-gcj02_lng, gcj02_lat = csc.wgs84_to_gcj02(float(lng), float(lat))
+    # 获取坐标信息
+    lng = nmea_parse.Longitude
+    lat = nmea_parse.Latitude
+    altitude = nmea_parse.Altitude
+    speed = nmea_parse.Speed
+
+    # 转换坐标系
+    gcj02_lng, gcj02_lat = csc.wgs84_to_gcj02(float(lng), float(lat))
+    utime.sleep(1)
 
 # 基站定位模块初始化
 cell_cfg = {

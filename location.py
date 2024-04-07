@@ -35,24 +35,28 @@
 @copyright :Copyright (c) 2022
 """
 
+import sys
 import ure
 import math
 import utime
-import osTimer
 import _thread
+
 try:
     import quecgnss
 except ImportError:
     quecgnss = None
-import cellLocator
-import usys as sys
+try:
+    import cellLocator
+except ImportError:
+    cellLocator = None
+try:
+    from wifilocator import wifilocator
+except ImportError:
+    wifilocator = None
 
-from queue import Queue
-from machine import UART, Pin
-from wifilocator import wifilocator
+from machine import UART, Pin, I2C
 
 from usr.modules.logging import getLogger
-from usr.modules.common import option_lock
 
 
 log = getLogger(__name__)
@@ -107,7 +111,7 @@ class NMEAParse:
         return tuple(nmea[1:].split("*")[0].split(",")) if nmea else ()
 
     def set_gps_data(self, gps_data):
-        self.__gps_data = gps_data
+        self.__gps_data = gps_data.decode() if isinstance(gps_data, bytes) else gps_data
 
     @property
     def GxRMC(self):
@@ -233,347 +237,362 @@ class NMEAParse:
 
 
 class GNSSPower:
+    """This class is for GNSS power control.
+
+    1. GNSS power switch.
+    2. GNSS standby mode of low energy.
+    3. GNSS backup mode of low energy.
+    """
 
     def __init__(self, PowerPin, StandbyPin, BackupPin):
-        self.__PowerPin = PowerPin
-        self.__StandbyPin = StandbyPin
-        self.__BackupPin = BackupPin
-        self.__gps_power_gpio = None
-        self.__gps_standby_gpio = None
-        self.__gps_backup_gpio = None
+        self.__pw = {
+            "power": {
+                "pin": PowerPin,
+                "gpio": None,
+            },
+            "standby": {
+                "pin": StandbyPin,
+                "gpio": None,
+            },
+            "backup": {
+                "pin": BackupPin,
+                "gpio": None,
+            },
+        }
 
-    def __power_control(self, method, onoff):
-        if method == "power_switch":
-            if self.__gps_power_gpio is None:
-                self.__gps_power_gpio = Pin(self.__PowerPin, Pin.OUT, Pin.PULL_DISABLE, onoff)
-            gpio_obj = self.__gps_power_gpio
-        elif method == "standby":
-            if self.__gps_standby_gpio is None:
-                self.__gps_standby_gpio = Pin(self.__StandbyPin, Pin.OUT, Pin.PULL_DISABLE, onoff)
-            gpio_obj = self.__gps_standby_gpio
-        elif method == "backup":
-            if self.__gps_backup_gpio is None:
-                self.__gps_backup_gpio = Pin(self.__BackupPin, Pin.OUT, Pin.PULL_DISABLE, onoff)
-            gpio_obj = self.__gps_backup_gpio
-        else:
+    def __pw_ctrl(self, method, onoff):
+        """Control gpio high or low level.
+
+        Args:
+            method (str): power, standby, backup.
+            onoff (int): 1 - high level, 0 - low level.
+
+        Returns:
+            bool: True - success, False - failed.
+        """
+        if not self.__pw.get(method) or onoff not in (0, 1):
             return False
-
-        if gpio_obj.read() != onoff:
-            gpio_obj.write(onoff)
+        if self.__pw[method]["gpio"] is None:
+            self.__pw[method]["gpio"] = Pin(self.__pw[method]["pin"], Pin.OUT, Pin.PULL_DISABLE, onoff)
+        if self.__pw[method]["gpio"].read() != onoff:
+            self.__pw[method]["gpio"].write(onoff)
             utime.sleep_ms(50)
-            if gpio_obj.read() != onoff:
+            if self.__pw[method]["gpio"].read() != onoff:
                 return False
         return True
 
-    def power_switch(self, onoff):
-        if self.__PowerPin is not None:
-            return self.__power_control("power_switch", onoff)
-        return False
+    def power(self, onoff):
+        """Control gnss power.
+
+        Args:
+            onoff (int): 1 - high level, 0 - low level.
+
+        Returns:
+            bool: True - success, False - failed.
+        """
+        return self.__pw_ctrl("power", onoff) if self.__pw["power"]["pin"] else False
 
     def backup(self, onoff):
-        if self.__BackupPin is not None:
-            return self.__power_control("backup", onoff)
-        return False
+        """Control gnss backup mode of low energy.
+
+        Args:
+            onoff (int): 1 - high level, 0 - low level.
+
+        Returns:
+            bool: True - success, False - failed.
+        """
+        return self.__pw_ctrl("backup", onoff) if self.__pw["backup"]["pin"] else False
 
     def standby(self, onoff):
-        if self.__StandbyPin is not None:
-            return self.__power_control("standby", onoff)
-        return False
+        """Control gnss standby mode of low energy.
+
+        Args:
+            onoff (int): 1 - high level, 0 - low level.
+
+        Returns:
+            bool: True - success, False - failed.
+        """
+        return self.__pw_ctrl("standby", onoff) if self.__pw["standby"]["pin"] else False
 
 
-class GNSS(GNSSPower):
+class GNSSBase(GNSSPower):
+    """This class is GNSS module base class."""
 
-    __RMC = 0
-    __GGA = 1
-    __GSV = 2
-    __GSA = 3
-    __VTG = 4
-    __GLL = 5
-
-    class _gps_mode:
-        none = 0x0
-        internal = 0x1
-        external = 0x2
-
-    def __init__(self, UARTn, buadrate, databits, parity, stopbits, flowctl, gps_mode, nmea, PowerPin, StandbyPin, BackupPin):
+    def __init__(self, PowerPin=None, StandbyPin=None, BackupPin=None):
         super().__init__(PowerPin, StandbyPin, BackupPin)
-        self.__UARTn = UARTn
-        self.__buadrate = buadrate
-        self.__databits = databits
-        self.__parity = parity
-        self.__stopbits = stopbits
-        self.__flowctl = flowctl
-        self.__gps_mode = gps_mode
-        self.__NMEA = nmea if nmea else 0b010111
-
-        self.__external_obj = None
-        self.__internal_obj = quecgnss
         self.__nmea_parse = NMEAParse()
+        self.__running = 0
+        self.__running_end = 0
+        self.__tid = None
+        self.__lock = _thread.allocate_lock()
+        self.__current_loc = {
+            "timestamp": "",
+            "state": "",
+            "lat": "",
+            "lat_dir": "",
+            "lng": "",
+            "lng_dir": "",
+            "speed": "",
+            "course": "",
+            "datestamp": "",
+            "altitude": "",
+            "satellites": "",
+        }
+        self.__hist_locs = []
+        self.__hist_size = 10
+        self.__current_nmea = b""
+        self.__trans = 0
+        self.__trans_output = print
 
-        self.__external_retrieve_queue = None
-        self.__queue_size = 2
-        self.__first_break = 0
-        self.__break = 0
-        self.__gps_data = ""
-        self.__rmc_data = ""
-        self.__gga_data = ""
-        self.__vtg_data = ""
-        self.__gsv_data = ""
+    def _open(self):
+        """Open gnss."""
+        pass
 
-        self.__gps_timer = osTimer()
-        self.__gps_data_check_timer = osTimer()
+    def _close(self):
+        """Close gnss."""
+        pass
 
-        if self.__gps_mode == self._gps_mode.external:
-            self.__external_init()
-        elif self.__gps_mode == self._gps_mode.internal:
-            self.__internal_init()
+    def _receive(self):
+        """Receive gnss nmea data."""
+        pass
 
-    @option_lock(_gps_data_set_lock)
-    def __set_gps_data(self, gps_data):
-        self.__gps_data = gps_data
+    def _parse_loc(self, gps_data):
+        """Parse gnss nmea data.
 
-    @option_lock(_gps_data_set_lock)
-    def __get_gps_data(self):
-        return self.__gps_data
+        Args:
+            gps_data (str/bytes): gnss nmea data.
+        """
+        if not gps_data:
+            return
+        if self.__trans:
+            self.__trans_output(gps_data)
+        self.__current_nmea = gps_data
+        self.__nmea_parse.set_gps_data(gps_data)
+        rmc_data = self.__nmea_parse.GxRMCData
+        if rmc_data and rmc_data[2] == "A":
+            with self.__lock:
+                self.__current_loc["timestamp"] = rmc_data[1]
+                self.__current_loc["state"] = rmc_data[2]
+                # self.__current_loc["lat"] = rmc_data[3]
+                self.__current_loc["lat"] = str(float(rmc_data[3][:2]) + float(rmc_data[3][2:]) / 60)
+                self.__current_loc["lat_dir"] = rmc_data[4]
+                # self.__current_loc["lng"] = rmc_data[5]
+                self.__current_loc["lng"] = str(float(rmc_data[5][:3]) + float(rmc_data[5][3:]) / 60)
+                self.__current_loc["lng_dir"] = rmc_data[6]
+                self.__current_loc["speed"] = str(float(rmc_data[7]) * 1.852)
+                self.__current_loc["course"] = rmc_data[8]
+                self.__current_loc["datestamp"] = rmc_data[9]
+                gga_data = self.__nmea_parse.GxGGAData
+                self.__current_loc["altitude"] = gga_data[9]
+                gsv_data = self.__nmea_parse.GxGSVData
+                self.__current_loc["satellites"] = gsv_data[3]
 
-    def __reverse_gps_data(self, this_gps_data):
-        log.debug("this_gps_data: \n%s" % this_gps_data)
-        if this_gps_data:
-            _gps_data = self.__get_gps_data()
-            if _gps_data:
-                _gps_data = CRLF.join(_gps_data.split(CRLF)[::-1])
-            _gps_data += this_gps_data.strip().replace("\r", "").replace("\n", "").replace("$", CRLF + "$")
-            _gps_data = CRLF.join(_gps_data.split(CRLF)[::-1])
-            self.__set_gps_data(_gps_data)
+        if len(self.__hist_locs) >= self.__hist_size:
+            self.__hist_locs.pop(0)
+        self.__hist_locs.append(self.__current_loc)
 
-    def __gps_timer_callback(self, args):
-        self.__break = 1
-        if self.__external_retrieve_queue is not None:
-            self.__external_retrieve_queue.put(False)
+    def set_trans(self, mode, output=print):
+        """Set transparent tag for weather to print gnss nmae or not.
 
-    def __gps_data_check_callback(self, args):
-        if not self.__check_gps_valid():
-            self.__gps_nmea_data_clean()
+        Args:
+            mode (int): 0 - disable, 1 - enable.
+        """
+        assert mode in (0, 1), "transparent mode must be 0 or 1."
+        assert callable(output), "output must be callable."
+        self.__trans = mode
+        self.__trans_output = output
 
-    def __external_init(self):
-        self.__external_retrieve_queue = Queue(maxsize=self.__queue_size)
+    def set_back_size(self, size):
+        """Set history location data backup size.
 
-    def __external_open(self):
-        self.power_switch(1)
-        self.__external_obj = UART(
-            self.__UARTn,
-            self.__buadrate,
-            self.__databits,
-            self.__parity,
-            self.__stopbits,
-            self.__flowctl
-        )
-        self.__external_obj.set_callback(self.__external_retrieve_cb)
+        Args:
+            size(int): History location data backup size.
+        """
+        assert isinstance(size, int) and size > 0, "History location data size must be int and larger than 0."
+        self.__hist_size = size
 
-    def __external_close(self):
-        self.__external_obj.close()
+    def read(self, mode=0):
+        """Read gnss data.
 
-    def __external_retrieve_cb(self, args):
-        if self.__external_retrieve_queue.size() >= self.__queue_size:
-            self.__external_retrieve_queue.get()
-        self.__external_retrieve_queue.put(True)
+        Args:
+            mode (int): 0 - current loction data, 1 - history location datas(max numbers is 10) (default: `0`)
 
-    def __internal_init(self):
-        if self.__internal_obj:
-            if self.__internal_obj.init() != 0:
-                log.error("GNSS INIT Failed.")
-            else:
-                log.debug("GNSS INIT Success.")
-        else:
-            log.error("Module quecgnss Import Error.")
+        Returns:
+            dict/list: location data.
+        """
+        with self.__lock:
+            return self.__current_loc if mode == 0 else (self.__hist_locs if mode == 1 else self.__current_nmea)
 
-    def __internal_open(self):
-        return True if self.__internal_obj.gnssEnable(1) == 0 else False
+    def start(self):
+        """Start a thread for reading and parsing gnss nmea data.
 
-    def __internal_close(self):
-        return True if self.__internal_obj.gnssEnable(0) == 0 else False
-
-    def __nmea_statement_exist(self, nmea_item):
-        return (self.__NMEA & (0b1 << nmea_item)) >> nmea_item
-
-    def __gps_nmea_data_clean(self):
-        self.__set_gps_data("")
-        self.__rmc_data = ""
-        self.__gga_data = ""
-        self.__gsv_data = ""
-        self.__gsa_data = ""
-        self.__vtg_data = ""
-        self.__gll_data = ""
-
-    def __check_gps_valid(self):
-        self.__nmea_parse.set_gps_data(self.__get_gps_data())
-        if not self.__rmc_data:
-            self.__rmc_data = self.__nmea_parse.GxRMC
-        _rmc_info = self.__nmea_parse.GxRMCData
-        loc_status = _rmc_info[2] if _rmc_info else "V"
-
-        if self.__rmc_data and loc_status == "A":
-            if self.__nmea_statement_exist(self.__GGA) and not self.__gga_data:
-                self.__gga_data = self.__nmea_parse.GxGGA
-            if self.__nmea_statement_exist(self.__GSV) and not self.__gsv_data:
-                self.__gsv_data = self.__nmea_parse.GxGSV
-            if self.__nmea_statement_exist(self.__GSA) and not self.__gsa_data:
-                self.__gsa_data = self.__nmea_parse.GxGSA
-            if self.__nmea_statement_exist(self.__VTG) and not self.__vtg_data:
-                self.__vtg_data = self.__nmea_parse.GxVTG
-            if self.__nmea_statement_exist(self.__GLL) and not self.__gll_data:
-                self.__gll_data = self.__nmea_parse.GxGLL
-
-            if self.__nmea_statement_exist(self.__GGA) and not self.__gga_data:
-                return False
-            if self.__nmea_statement_exist(self.__GSV) and not self.__gsv_data:
-                return False
-            if self.__nmea_statement_exist(self.__GSA) and not self.__gsa_data:
-                return False
-            if self.__nmea_statement_exist(self.__VTG) and not self.__vtg_data:
-                return False
-            if self.__nmea_statement_exist(self.__GLL) and not self.__gll_data:
-                return False
-            return True
-
+        Returns:
+            bool: True - success, False - failed.
+        """
+        if self.__running == self.__running_end == 0:
+            self.__running = 1
+            try:
+                if not self.__tid or (self.__tid and not _thread.threadIsRunning(self.__tid)):
+                    _thread.stack_size(0x2000)
+                    self.__tid = _thread.start_new_thread(self._receive, ())
+                    return True
+            except Exception as e:
+                sys.print_exception(e)
         return False
 
-    def __external_read(self):
-        self.__external_open()
-        log.debug("__external_read start")
+    def stop(self):
+        """Stop gnss reading thread."""
+        self.__running = 0 if self.__running == 1 else self.__running
 
-        while self.__break == 0:
-            self.__gps_timer.start(50, 0, self.__gps_timer_callback)
-            signal = self.__external_retrieve_queue.get()
-            log.debug("[first] signal: %s" % signal)
-            if signal:
-                to_read = self.__external_obj.any()
-                log.debug("[first] to_read: %s" % to_read)
-                if to_read > 0:
-                    self.__set_gps_data(self.__external_obj.read(to_read).decode())
-            self.__gps_timer.stop()
-        self.__break = 0
 
-        self.__gps_nmea_data_clean()
-        self.__gps_data_check_timer.start(2000, 1, self.__gps_data_check_callback)
-        cycle = 0
-        while self.__break == 0:
-            self.__gps_timer.start(1500, 0, self.__gps_timer_callback)
-            signal = self.__external_retrieve_queue.get()
-            log.debug("[second] signal: %s" % signal)
-            if signal:
-                to_read = self.__external_obj.any()
-                log.debug("[second] to_read: %s" % to_read)
-                if to_read > 0:
-                    self.__reverse_gps_data(self.__external_obj.read(to_read).decode())
-                    if self.__check_gps_valid():
-                        self.__break = 1
+class GNSSInternal(GNSSBase):
+    """This class is for internal gnss."""
 
-            self.__gps_timer.stop()
-            cycle += 1
-            if cycle >= self.__retry:
-                self.__break = 1
-            if self.__break != 1:
-                utime.sleep(1)
-        self.__gps_data_check_timer.stop()
-        self.__break = 0
+    def __init__(self):
+        super().__init__()
+        assert quecgnss is not None, "quecgnss is not supported."
+        assert quecgnss.init() == 0, "quecgnss init failed"
+        self._close()
 
-        # To check GPS data is usable or not.
-        self.__gps_data_check_callback(None)
-        self.__external_close()
-        log.debug("__external_read %s." % ("success" if self.__get_gps_data() else "failed"))
-        return self.__get_gps_data()
+    def _open(self):
+        """Enable quecgness.
 
-    def __internal_read(self):
+        Returns:
+            bool: True - success, False - failed.
+        """
+        return (quecgnss.gnssEnable(1) == 0)
+
+    def _close(self):
+        """Disable quecgness.
+
+        Returns:
+            bool: True - success, False - failed.
+        """
+        return (quecgnss.gnssEnable(0) == 0)
+
+    def _receive(self):
+        """Thread for reading and parsing gnss nmea data."""
         log.debug("__internal_read start.")
-        self.__internal_open()
-
-        while self.__break == 0:
+        self.__running_end = 1
+        self._open()
+        while self.__running:
             gnss_data = quecgnss.read(1024)
-            if gnss_data[0] == 0:
-                self.__break = 1
-        self.__break = 0
+            self._parse_loc(gnss_data[1] if (isinstance(gnss_data, tuple) and gnss_data[1]) else b"")
+            utime.sleep(1)
+        self._close()
+        self.__tid = None
+        self.__running_end = 0
+        log.debug("__internal_read stop.")
 
-        self.__gps_nmea_data_clean()
-        self.__gps_data_check_timer.start(2000, 1, self.__gps_data_check_callback)
-        cycle = 0
-        while self.__break == 0:
-            gnss_data = quecgnss.read(1024)
-            if gnss_data and gnss_data[1]:
-                this_gps_data = gnss_data[1].decode() if len(gnss_data) > 1 and gnss_data[1] else ""
-                self.__reverse_gps_data(this_gps_data)
-                if self.__check_gps_valid():
-                    self.__break = 1
-            cycle += 1
-            if cycle >= self.__retry:
-                if self.__break != 1:
-                    self.__break = 1
-            if self.__break != 1:
-                utime.sleep(1)
-        self.__gps_data_check_timer.stop()
-        self.__break = 0
 
-        self.__gps_data_check_callback(None)
-        self.__internal_close()
-        log.debug("__internal_read %s." % ("success" if self.__get_gps_data() else "failed"))
-        return self.__get_gps_data()
+class GNSSExternalUART(GNSSBase):
+    """This class is for external gnss."""
 
-    def read(self, retry=30):
-        self.__retry = retry
-        gps_data = ""
-        if self.__gps_mode == self._gps_mode.external:
-            gps_data = self.__external_read()
-        elif self.__gps_mode == self._gps_mode.internal:
-            gps_data = self.__internal_read()
+    def __init__(self, UARTn, buadrate, databits, parity, stopbits, flowctl, PowerPin, StandbyPin, BackupPin):
+        super().__init__(PowerPin, StandbyPin, BackupPin)
+        self.__uart_args = (UARTn, buadrate, databits, parity, stopbits, flowctl)
+        self.__gnss = None
 
-        res = 0 if gps_data else -1
-        return (res, gps_data)
+    def _open(self):
+        """Enable gnss power and init uart for reading gnss nmea data."""
+        self.power(1)
+        self.__gnss = UART(*self.__uart_args)
+
+    def _close(self):
+        """Close uart for stop reading gnss nmea data."""
+        self.__gnss.close()
+
+    def _receive(self):
+        """Thread for reading and parsing gnss nmea data."""
+        log.debug("GNSSExternalUART _receive start.")
+        self.__running_end = 1
+        self._open()
+        while self.__running:
+            size = self.__gnss.any()
+            self._parse_loc(self.__gnss.read(size) if size > 0 else b"")
+            utime.sleep(1)
+        self._close()
+        self.__tid = None
+        self.__running_end = 0
+        log.debug("GNSSExternalUART _receive stop.")
+
+
+class GNSSExternalI2C(GNSSBase):
+
+    def __init__(self, I2Cn, i2cmode, slaveaddress, addr, addr_len, PowerPin, StandbyPin, BackupPin):
+        super().__init__(PowerPin, StandbyPin, BackupPin)
+        self.__gnss = I2C(I2Cn, i2cmode)
+        self.slaveaddress = slaveaddress
+        self.addr = addr
+        self.addr_len = addr_len
+        self.source_data = b""
+
+    def _receive(self):
+        log.debug("GNSSExternalI2C _receive start.")
+        self.__running_end = 1
+        self._open()
+        recv_size = 1024
+        nmea_data = bytearray([])
+        while self.__running:
+            recv_data = bytearray(recv_size)
+            self.__gnss.read(self.slaveaddress, self.addr, self.addr_len, recv_data, recv_size, 0)
+            nmea_data.extend(recv_data)
+            nmea_data = self._parse_loc(nmea_data)
+            utime.sleep_ms(500)
+        self._close()
+        self.__tid = None
+        self.__running_end = 0
+        log.debug("GNSSExternalI2C _receive stop.")
+
+    def _parse_loc(self, data):
+        gps_data = bytearray([])
+        for i in data:
+            if i != 0x00:
+                gps_data.append(i)
+            else:
+                if gps_data:
+                    super()._parse_loc(bytes(gps_data))
+                    gps_data = bytearray([])
+        return gps_data
+
+
+class GNSS:
+    """This class is GNSS module, return GNSSInternal or GNSSExternalUART by checking gps mode args."""
+
+    class GPS_MODE:
+        internal = 0x1
+        external_uart = 0x2
+        external_i2c = 0x3
+
+    def __new__(cls, *args, **kwargs):
+        if kwargs.get("gps_mode") == cls.GPS_MODE.internal:
+            return GNSSInternal()
+        elif kwargs.get("gps_mode") == cls.GPS_MODE.external_uart:
+            return GNSSExternalUART(
+                kwargs.get("UARTn"), kwargs.get("buadrate"), kwargs.get("databits"), kwargs.get("parity"), kwargs.get("stopbits"), kwargs.get("flowctl"),
+                kwargs.get("PowerPin"), kwargs.get("StandbyPin"), kwargs.get("BackupPin")
+            )
+        elif kwargs.get("gps_mode") == cls.GPS_MODE.external_i2c:
+            return GNSSExternalI2C(
+                kwargs.get("I2Cn"), kwargs.get("i2cmode"), kwargs.get("slaveaddress"), kwargs.get("addr"), kwargs.get("addr_len"),
+                kwargs.get("PowerPin"), kwargs.get("StandbyPin"), kwargs.get("BackupPin")
+            )
+        else:
+            raise ValueError("Args gps_mode is not compare.")
 
 
 class CellLocator:
     """This class is for reading cell location data"""
 
     def __init__(self, serverAddr, port, token, timeout, profileIdx):
-        self.__serverAddr = serverAddr
-        self.__port = port
-        self.__token = token
-        self.__timeout = timeout
-        self.__profileIdx = profileIdx
-        self.__queue = Queue()
-        self.__thread_id = None
-        self.__timeout_timer = osTimer()
+        self.__args = (serverAddr, port, token, timeout, profileIdx)
 
-    def __timeout_callback(self, args):
-        self.__queue.put(())
-
-    def __read_thread(self):
-        loc_data = ()
+    def read(self):
+        loc_data = -1
         try:
-            loc_data = cellLocator.getLocation(
-                self.__serverAddr,
-                self.__port,
-                self.__token,
-                self.__timeout,
-                self.__profileIdx
-            )
-            loc_data = loc_data if isinstance(loc_data, tuple) and loc_data[0] and loc_data[1] else ()
+            loc_data = cellLocator.getLocation(*self.__args) if cellLocator else -1
         except Exception as e:
             sys.print_exception(e)
-        self.__queue.put(loc_data)
-
-    def read(self, timeout=5):
-        log.debug("CellLocator start read")
-        # Start read thread and stop timeout
-        self.__thread_id = _thread.start_new_thread(self.__read_thread, ())
-        self.__timeout_timer.start(timeout * 1000, 0, self.__timeout_callback)
-        # Wait loc data
-        loc_data = self.__queue.get()
-        # Stop read thread and stop timeout
-        self.__timeout_timer.stop()
-        if _thread.threadIsRunning(self.__thread_id):
-            _thread.stop_thread(self.__thread_id)
-            self.__thread_id = None
-        log.debug("CellLocator end read")
         return loc_data
 
 
@@ -581,34 +600,12 @@ class WiFiLocator:
     """This class is for reading wifi location data"""
 
     def __init__(self, token):
-        self.__wifilocator_obj = wifilocator(token)
-        self.__queue = Queue()
-        self.__thread_id = None
-        self.__timeout_timer = osTimer()
+        self.__wifilocator = wifilocator(token) if wifilocator else None
 
-    def __timeout_callback(self, args):
-        self.__queue.put(())
-
-    def __read_thread(self):
-        loc_data = ()
+    def read(self):
+        loc_data = -1
         try:
-            loc_data = self.__wifilocator_obj.getwifilocator()
-            loc_data = loc_data if isinstance(loc_data, tuple) and loc_data[0] and loc_data[1] else ()
+            return self.__wifilocator.getwifilocator() if self.__wifilocator else -1
         except Exception as e:
             sys.print_exception(e)
-        self.__queue.put(loc_data)
-
-    def read(self, timeout=5):
-        log.debug("WiFiLocator start read")
-        # Start read thread and stop timeout
-        self.__thread_id = _thread.start_new_thread(self.__read_thread, ())
-        self.__timeout_timer.start(timeout * 1000, 0, self.__timeout_callback)
-        # Wait loc data
-        loc_data = self.__queue.get()
-        # Stop read thread and stop timeout
-        self.__timeout_timer.stop()
-        if _thread.threadIsRunning(self.__thread_id):
-            _thread.stop_thread(self.__thread_id)
-            self.__thread_id = None
-        log.debug("WiFiLocator end read")
         return loc_data
