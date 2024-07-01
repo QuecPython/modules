@@ -1,18 +1,4 @@
 # Copyright (c) Quectel Wireless Solution, Co., Ltd.All Rights Reserved.
-#  
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#  
-#     http://www.apache.org/licenses/LICENSE-2.0
-#  
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-# Copyright (c) Quectel Wireless Solution, Co., Ltd.All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -152,51 +138,62 @@ class CacheFile:
         "RET_HEAD": 0,
     }
 
-    def __init__(self):
+    def __init__(self, cache_cfg=None, filename=None):
         """Init cache cfg and open cache data file."""
-        self.cache_cfg = self._CACHE_CFG_
+        self.cache_cfg = self._CACHE_CFG_ if not cache_cfg else cache_cfg
+        self.filename = self._FILE_ if not filename else filename
         self.file = None
         self.lock = _thread.allocate_lock()
-        self.__cache_init()
         self.open()
+        self.__cache_init()
 
     def __cache_init(self):
         """Init cache config from cache file or _CACHE_CFG_."""
-        _exist_ = ql_fs.path_exists(self._FILE_)
-        with open(self._FILE_, ("b+" if _exist_ else "wb+")) as cf:
-            if _exist_ and cf.read(32):
-                cf.seek(0)
-                [self.cache_cfg.update({key: int.from_bytes(cf.read(4), self._BYTEORDER_)}) for key in self._CACHE_CFG_]
-            else:
-                cf.seek(0)
-                cache_cfg_bytes = b"".join([self.cache_cfg[key].to_bytes(4, self._BYTEORDER_) for key in self._CACHE_CFG_])
-                cache_cfg_bytes += (0).to_bytes(32 - len(cache_cfg_bytes), self._BYTEORDER_)
-                cf.write(cache_cfg_bytes)
+        _exist_ = ql_fs.path_exists(self.filename)
+        if _exist_ and self.file.read(32):
+            self.__cache_cfg_read()
+        else:
+            self.__cache_cfg_save()
+
+    def __cache_cfg_save(self):
+        self.file.seek(0)
+        cache_cfg_bytes = b"".join([self.cache_cfg[key].to_bytes(4, self._BYTEORDER_) for key in self._CACHE_CFG_])
+        cache_cfg_bytes += (0).to_bytes(32 - len(cache_cfg_bytes), self._BYTEORDER_)
+        self.file.write(cache_cfg_bytes)
+
+    def __cache_cfg_read(self):
+        self.file.seek(0)
+        [self.cache_cfg.update({key: int.from_bytes(self.file.read(4), self._BYTEORDER_)}) for key in self._CACHE_CFG_]
 
     def open(self):
         """Open cache data file."""
         with self.lock:
-            self.file⁮ = open(self._FILE_, "b+") if not self.file else self.file
+            self.file = open(self.filename, "wb+") if not self.file else self.file
 
-    def read(self):
+    def read(self, offset=None):
         """Read a block cache data.
 
         Returns:
             bytes: cache data.
         """
-        self.open()
         with self.lock:
-            if self.cache_cfg["RET_HEAD"] == 0 and self.cache_cfg["RINDEX"] >= self.cache_cfg["WINDEX"]:
-                return b""
-            if self.cache_cfg["RET_HEAD"] and self.cache_cfg["RINDEX"] < self.cache_cfg["WINDEX"]:
-                self.cache_cfg["RINDEX"] = self.cache_cfg["WINDEX"]
-            if (self.cache_cfg["RINDEX"] + self.cache_cfg["BLOCK_SIZE"]) > (self.cache_cfg["BAK_NUM"] * self.cache_cfg["BLOCK_SIZE"]):
-                self.cache_cfg["RINDEX"] = self._CACHE_CFG_["RINDEX"]
-                self.cache_cfg["RET_HEAD"] = 0
-            self.file.seek(self.cache_cfg["RINDEX"])
-            data = self.file.read(self.cache_cfg["BLOCK_SIZE"])
-            self.cache_cfg["RINDEX"] += self.cache_cfg["BLOCK_SIZE"]
-            return data
+            if offset is None:
+                if self.cache_cfg["RET_HEAD"] == 0 and self.cache_cfg["RINDEX"] >= self.cache_cfg["WINDEX"]:
+                    return b""
+                if self.cache_cfg["RET_HEAD"] and self.cache_cfg["RINDEX"] < self.cache_cfg["WINDEX"]:
+                    self.cache_cfg["RINDEX"] = self.cache_cfg["WINDEX"]
+                if (self.cache_cfg["RINDEX"] + self.cache_cfg["BLOCK_SIZE"]) > (self.cache_cfg["BAK_NUM"] * self.cache_cfg["BLOCK_SIZE"]):
+                    self.cache_cfg["RINDEX"] = self._CACHE_CFG_["RINDEX"]
+                    self.cache_cfg["RET_HEAD"] = 0
+                self.file.seek(self.cache_cfg["RINDEX"])
+                data = self.file.read(self.cache_cfg["BLOCK_SIZE"])
+                self.cache_cfg["RINDEX"] += self.cache_cfg["BLOCK_SIZE"]
+                self.__cache_cfg_save()
+                return data
+            else:
+                self.file.seek(offset)
+                data = self.file.read(self.cache_cfg["BLOCK_SIZE"])
+                return data
 
     def write(self, data):
         """Write cache data to cache file.
@@ -207,7 +204,6 @@ class CacheFile:
         Returns:
             bool: True - success, False - falied.
         """
-        self.open()
         with self.lock:
             try:
                 # Check data length is large than BLOCK_SIZE.
@@ -225,6 +221,7 @@ class CacheFile:
                 self.file.write(data)
                 self.cache_cfg["WINDEX"] += self.cache_cfg["BLOCK_SIZE"]
                 self.cache_cfg["WINDEX"] = self.cache_cfg["WINDEX"]
+                self.__cache_cfg_save()
                 return True
             except Exception as e:
                 sys.print_exception(e)
@@ -236,7 +233,6 @@ class CacheFile:
         Returns:
             bool: True - success, False - falied.
         """
-        self.open()
         with self.lock:
             try:
                 self.file.flush()
@@ -246,15 +242,16 @@ class CacheFile:
 
     def clear(self):
         """Clear cache data by reset cache config pointer."""
-        self.open()
         with self.lock:
             self.cache_cfg["WINDEX"] = self._CACHE_CFG_["WINDEX"]
             self.cache_cfg["RINDEX"] = self._CACHE_CFG_["RINDEX"]
             self.cache_cfg["RET_HEAD"] = 0
+            self.__cache_cfg_save()
 
     def close(self):
         """Close cache data file."""
         with self.lock:
+            self.file.flush()
             self.file.close()
             self.file = None
 

@@ -1,18 +1,4 @@
 # Copyright (c) Quectel Wireless Solution, Co., Ltd.All Rights Reserved.
-#  
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#  
-#     http://www.apache.org/licenses/LICENSE-2.0
-#  
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-# Copyright (c) Quectel Wireless Solution, Co., Ltd.All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -72,14 +58,18 @@ FOTA_ERROR_CODE = {
 class AliIot:
 
     def __init__(self, product_key=None, device_name=None, device_secret=None, product_secret=None,
-                 server="iot-as-mqtt.cn-shanghai.aliyuncs.com", qos=1):
+                 server=None, qos=1):
         self.__product_key = product_key
-        self.__product_secret = product_secret
+        self.__product_secret = product_secret if product_secret else None
         self.__device_name = device_name
-        self.__device_secret = device_secret
+        self.__device_secret = device_secret if device_secret else None
         self.__domain = server
         self.__qos = qos
-        self.__server = None
+        self.__server = "%s.%s" % (self.__product_key, self.__domain)
+
+        if self.__product_secret is None and self.__device_secret is None:
+            raise ValueError("Neither product_secret nor device_secret exist.")
+
         self.__id_lock = _thread.allocate_lock()
         self.__get_post_lock = _thread.allocate_lock()
         self.__callback = None
@@ -148,7 +138,7 @@ class AliIot:
         topic = topic.decode()
         try:
             data = ujson.loads(data)
-        except:
+        except Exception:
             pass
         log.debug("topic: %s, data: %s" % (topic, str(data)))
 
@@ -233,7 +223,6 @@ class AliIot:
 
     def connect(self):
         res = -1
-        self.__server = "%s.%s" % (self.__product_key, self.__domain)
         log.debug("self.__product_key: %s" % self.__product_key)
         log.debug("self.__product_secret: %s" % self.__product_secret)
         log.debug("self.__device_name: %s" % self.__device_name)

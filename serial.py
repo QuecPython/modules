@@ -1,18 +1,4 @@
 # Copyright (c) Quectel Wireless Solution, Co., Ltd.All Rights Reserved.
-#  
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#  
-#     http://www.apache.org/licenses/LICENSE-2.0
-#  
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-# Copyright (c) Quectel Wireless Solution, Co., Ltd.All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,11 +17,10 @@ author: dustin.wei
 email: dustin.wei@quectel.com
 date: 2023-2-14
 
-背景：QuecPython的machine.uart串口通信模块的读写均为**非阻塞**模式，现需求实现**阻塞**模式`读`操作。
-功能描述：封装Serial类，实现基于QuecPython的串口通信阻塞/非阻塞读操作。
+背景: QuecPython的machine.uart串口通信模块的读写均为**非阻塞**模式，现需求实现**阻塞**模式`读`操作。
+功能描述: 封装Serial类, 实现基于QuecPython的串口通信阻塞/非阻塞读操作。
 """
 
-import _thread
 from machine import UART, Timer
 from usr.modules.common import Condition
 
