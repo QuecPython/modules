@@ -1,26 +1,63 @@
-# 独立功能模块
+# Independent Function Module
 
-## 简介
+[中文](./README_ZH.md) | English
 
-- 该项目将不同的功能进行了独立的封装, 每个文件都是一个单独的模块, 可以进行独立使用
-- 所有模块都采用了观察者模式的设计方式
-- 模块之间的组合使用可使用注册观察者和被观察者的方式进行组合使用(使用回调的方式进行信息的通知), 将模块之间的耦合性降到最低
+## Introduction
 
-## 模块列表
+- This project encapsulates different functions independently. Each file is a separate module and can be used independently.
+- All modules are designed using the observer pattern.
+- Modules can be used in combination by registering observers and observed objects (using callbacks to notify information) to minimize the coupling between modules.
 
-|模块|简介|说明|
+## Modules
+
+|Module|Introduction|Description|
 |:---|---|---|
-|aliyunIot.py|阿里云物联网模块|该模块用于提供阿里云物联网模块相关功能, MQTT协议的消息发布与订阅, OTA升级。|
-|battery.py|设备电池模块|该模块用于查询当前设备的电池电量与电压, 设备的充电状态。|
-|buzzer.py|设备电池模块|该模块用于查询当前设备的电池电量与电压, 设备的充电状态。|
-|common.py|公用模块|该模块封装了一些公用组件与基类, 方便其他模块使用。|
-|history.py|历史文件模块|该模块主要用于读取记录与清理历史数据文件。|
-|led.py|LED模块|该模块功能用于控制模块LED灯的开关与周期性闪烁。|
-|location.py|位置信息模块|本模块使用的定位坐标系为WGS-84, 如需转换GCJ-02坐标系, 本模块提供了`WGS84ToGCJ02`方法进行经纬度坐标系的转换。|
-|logging.py|日志模块|该模块用于代码日志打印。|
-|power_manage.py|低功耗定时唤醒模块|提供定时低功耗唤醒功能, 当设备不进行业务处理时, 可将设备调整为低功耗模式, 当设备唤醒时, 可通知用户进行业务处理。|
-|temp_humidity_sensor.py|温湿度传感器模块|该模块用于读取温湿度传感器数据。|
-|thingsboard|ThingsBoard平台|该模块用于提供物联网模块相关功能, MQTT协议的消息发布与订阅。|
-|serial|串口通信模块|实现阻塞读。|
-||音频播放|支持歌单循环播放、停止，支持单播放。|
+|aliIot.py|Alibaba Internet of Things module|This module is used to provide functions related to the Alibaba Cloud IoT module, message publishing and subscription of the MQTT protocol, and OTA upgrades. |
+|battery.py|Battery management module|This module is used to query the battery power and voltage of the current device, and the charging status of the device. |
+|buzzer.py|Buzzer management module|This module function is used to control the switch and periodic switch of the module buzzer. |
+|common.py|Announcement method module|This module encapsulates some public components and base classes to facilitate the use of other modules. |
+|history.py|History file module|This module is mainly used to read records and clean historical data files. |
+|led.py|LED management module|This module function is used to control the switching and periodic flashing of the module's LED lights. |
+|location.py|Positioning management module|This module provides functional encapsulation of three positioning modes: GNSS positioning, base station positioning, and Wifi positioning, and provides a conversion method from WGS-84 to GCJ-02 coordinate system. |
+|logging.py|Log module|This module is used for code log printing. |
+|net_manage.py|Network management module|This module is used to manage device network-related functions, such as: network presence, dial-up, network status query, etc. |
+|player.py|Audio playback|Supports song list loop playback, stop, and single playback. |
+|power_manage.py|Low-power management|Provides scheduled low-power wake-up function. When the device is not performing business processing, the device can be adjusted to low-power mode. When the device wakes up, the user can be notified to perform business processing. |
+|serial.py|Serial communication module|Realizes blocking reading. |
+|temp_humidity_sensor.py|Temperature and humidity sensor module|This module is used to read temperature and humidity sensor data. |
+|thingsboard.py|ThingsBoard Platform|This module is used to provide functions related to the Internet of Things module and message publishing and subscription of the MQTT protocol. |
 
+## Usage
+
+- [aliIot User Guide](./docs/en/aliIot_User_Guide.md)
+- [battery User Guide](./docs/en/battery_User_Guide.md)
+- [buzzer User Guide](./docs/en/buzzer_User_Guide.md)
+- [common User Guide](./docs/en/common_User_Guide.md)
+- [history User Guide](./docs/en/history_User_Guide.md)
+- [led User Guide](./docs/en/led&buzzer_User_Guide.md)
+- [location User Guide](./docs/en/location_User_Guide.md)
+- [logging User Guide](./docs/en/logging_User_Guide.md)
+- [net_manage User Guide](./docs/en/net_manage_User_Guide.md)
+- [player User Guide](./docs/en/player_User_Guide.md)
+- [power_manage User Guide](./docs/en/power_manage_User_Guide.md)
+- [serial User Guide](./docs/en/serial_User_Guide.md)
+- [temp_humidity_sensor User Guide](./docs/en/temp_humidity_sensor_User_Guide.md)
+- [thingsboard User Guide](./docs/en/thingsboard_User_Guide.md)
+
+## Contribution
+
+We welcome contributions to improve this project! Please follow these steps to contribute:
+
+1. Fork the repository.
+2. Create a new branch (`git checkout -b feature/your-feature`).
+3. Commit your changes (`git commit -m 'Add your feature'`).
+4. Push to the branch (`git push origin feature/your-feature`).
+5. Open a Pull Request.
+
+## License
+
+This project is licensed under the Apache License. See the [LICENSE](./LICENSE) file for details.
+
+## Support
+
+If you have any questions or need support, please refer to the [QuecPython documentation](https://python.quectel.com/doc/en) or open an issue in this repository.

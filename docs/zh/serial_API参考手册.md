@@ -1,12 +1,16 @@
-# 串口通信模块 用户指导手册
+# 串口通信模块 API 参考手册
+
+中文 | [English](../en/serial_API_Reference.md)
 
 ## 简介
 
 > 该模块用于串口通信（阻塞、非阻塞模式读）。
 
-## 使用说明
+## API 说明
 
-1、初始化
+### Serial
+
+> 初始化。
 
 ```python
 from serial import Serial
@@ -22,14 +26,18 @@ serial = Serial(
 )
 ```
 
-2、串口写
+### Serial.write
+
+> 串口写。
 
 ```python
 # 行为与`machine.UART.write`行为一致。
 serial.write(b'hello world!')
 ```
 
-3、串口读
+### Serial.read
+
+> 串口读。
 
 ```python
 # 非阻塞模式读，行为与`machine.UART.read`一致
@@ -41,4 +49,3 @@ r_data = serial.read(1024, timeout=-1)
 # 阻塞读。读满指定字节则立刻返回。（超时timeout(ms)后仍未读满指定字节，则返回实际读取字节。）
 r_data = serial.read(1024, timeout=1000)
 ```
-

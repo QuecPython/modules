@@ -1,4 +1,4 @@
-# 网络管理模块 用户指导手册
+# 网络管理模块 API 参考手册
 
 ## 简介
 
@@ -59,7 +59,7 @@ net_manage.sim_status
 |:---|---|
 |int|SIM卡状态枚举值|
 
-**SIM卡状态枚举值**
+**SIM卡状态枚举值:**
 
 |枚举值|说明|
 |:---|---|
@@ -222,7 +222,7 @@ net_manage.set_callback(callabck=net_callback)
 |:---|---|---|
 |callabck|function|回调函数, <br>函数入参`args`, 数据格式`(pdp_id, state)`|
 
-**回调函数参数**
+**回调函数参数:**
 
 |参数|类型|说明|
 |:---|---|---|
