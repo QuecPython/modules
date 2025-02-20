@@ -26,7 +26,11 @@ import utime
 import ujson
 import _thread
 from umqtt import MQTTClient
-from usr.modules.logging import getLogger
+
+try:
+    from modules.logging import getLogger
+except ImportError:
+    from usr.modules.logging import getLogger
 
 log = getLogger(__name__)
 

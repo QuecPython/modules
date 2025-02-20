@@ -39,8 +39,10 @@ class History:
         self.__bak_num = bak_num
         self.__lock = _thread.allocate_lock()
 
-        if not ql_fs.path_exists(self.__hist_file):
-            ql_fs.touch(self.__hist_file, {"data": []})
+        if ql_fs.path_exists(self.__hist_file):
+            ql_fs.touch(self.__hist_file, {})
+
+        ql_fs.touch(self.__hist_file, {"data": []})
 
     def __read(self):
         """Read history file info.

@@ -26,6 +26,7 @@ import ure
 import math
 import utime
 import _thread
+from machine import UART, Pin, I2C
 
 try:
     import quecgnss
@@ -39,11 +40,10 @@ try:
     from wifilocator import wifilocator
 except ImportError:
     wifilocator = None
-
-from machine import UART, Pin, I2C
-
-from usr.modules.logging import getLogger
-
+try:
+    from modules.logging import getLogger
+except ImportError:
+    from usr.modules.logging import getLogger
 
 log = getLogger(__name__)
 
@@ -365,11 +365,17 @@ class GNSSBase(GNSSPower):
                 # self.__current_loc["lng"] = rmc_data[5]
                 self.__current_loc["lng"] = str(float(rmc_data[5][:3]) + float(rmc_data[5][3:]) / 60)
                 self.__current_loc["lng_dir"] = rmc_data[6]
-                self.__current_loc["speed"] = str(float(rmc_data[7]) * 1.852)
+                if rmc_data[7] and rmc_data[7].replace('.', '', 1).isdigit():
+                    self.__current_loc["speed"] = str(float(rmc_data[7]) * 1.852)
+                else:
+                    self.__current_loc["speed"] = None
                 self.__current_loc["course"] = rmc_data[8]
                 self.__current_loc["datestamp"] = rmc_data[9]
                 gga_data = self.__nmea_parse.GxGGAData
-                self.__current_loc["altitude"] = gga_data[9]
+                if len(gga_data) >= 10:
+                    self.__current_loc["altitude"] = gga_data[9]
+                else:
+                    self.__current_loc["altitude"] = None
                 gsv_data = self.__nmea_parse.GxGSVData
                 self.__current_loc["satellites"] = gsv_data[3]
 

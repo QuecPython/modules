@@ -24,7 +24,10 @@
 import utime
 from misc import Power, ADC, USB
 from machine import Pin, ExtInt
-from usr.modules.logging import getLogger
+try:
+    from modules.logging import getLogger
+except ImportError:
+    from usr.modules.logging import getLogger
 
 log = getLogger(__name__)
 

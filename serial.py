@@ -22,7 +22,11 @@ date: 2023-2-14
 """
 
 from machine import UART, Timer
-from usr.modules.common import Condition
+
+try:
+    from modules.common import Condition
+except ImportError:
+    from usr.modules.common import Condition
 
 
 class TimerContext(object):

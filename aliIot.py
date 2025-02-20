@@ -31,7 +31,10 @@ import usys as sys
 from queue import Queue
 from aLiYun import aLiYun
 
-from usr.modules.logging import getLogger
+try:
+    from modules.logging import getLogger
+except ImportError:
+    from usr.modules.logging import getLogger
 
 log = getLogger(__name__)
 
@@ -75,7 +78,6 @@ class AliIot:
         self.__callback = None
         self.__post_res = {}
         self.__conn_tag = 0
-        self.__init_id_iter()
         self.__events = []
         self.__services = []
 
@@ -83,19 +85,11 @@ class AliIot:
     def __timestamp(self):
         return str(utime.mktime(utime.localtime())) + "000"
 
-    def __init_id_iter(self):
-        self.__id_iter = iter(range(0xFFFF))
-
     @property
     def __id(self):
         """Get message id for publishing data"""
         with self.__id_lock:
-            try:
-                _id = next(self.__id_iter)
-            except StopIteration:
-                self.__init_id_iter()
-                _id = next(self.__id_iter)
-
+            _id = utime.ticks_us()
         return str(_id)
 
     def __put_post_res(self, msg_id, res):
@@ -159,30 +153,32 @@ class AliIot:
     def __subscribe_topics(self):
         self.__init_topics()
         res = 0
-        if not self.__subscribe_topic(self.ica_topic_property_post_reply):
+        if not self.__subscribe_topic(self.ica_topic_property_post):
             res = 1
-        if not self.__subscribe_topic(self.ica_topic_property_set):
+        if not self.__subscribe_topic(self.ica_topic_property_post_reply):
             res = 2
-        if not self.__subscribe_topic(self.ota_topic_device_upgrade):
+        if not self.__subscribe_topic(self.ica_topic_property_set):
             res = 3
-        if not self.__subscribe_topic(self.ota_topic_firmware_get_reply):
+        if not self.__subscribe_topic(self.ota_topic_device_upgrade):
             res = 4
-        if not self.__subscribe_topic(self.rrpc_topic_request):
+        if not self.__subscribe_topic(self.ota_topic_firmware_get_reply):
             res = 5
-        _res = 5
+        if not self.__subscribe_topic(self.rrpc_topic_request):
+            res = 6
+        _res = 6
         for event in self.__events:
             if not self.__subscribe_topic(self.ica_topic_event_post_reply.format(event)):
                 _res += 1
                 break
-        if _res != 5:
+        if _res != 6:
             res = _res
             return res
-        _res = 5 + len(self.__events)
+        _res = 6 + len(self.__events)
         for service in self.__services:
             if not self.__subscribe_topic(self.ica_topic_service_sub.format(service)):
                 _res += 1
                 break
-        if _res > 5 + len(self.__events):
+        if _res > 6 + len(self.__events):
             res = _res
         return res
 
@@ -230,6 +226,7 @@ class AliIot:
         log.debug("self.__server: %s" % self.__server)
         self.__server = aLiYun(self.__product_key, self.__product_secret, self.__device_name, self.__device_secret, self.__server)
         res = self.__server.setMqtt(self.__device_name)
+        log.debug("connect res: %s" % res)
         if res == 0:
             self.__server.setCallback(self.__subscribe_callback)
             res = self.__subscribe_topics()
@@ -397,25 +394,24 @@ class AliIotOTA:
         # _thread.stack_size(0x2000)
         if self.__module == self.__project_name:
             # _thread.start_new_thread(self.__start_sota, ())
-            self.__start_sota()
+            return self.__start_sota()
         elif self.__module == self.__firmware_name:
             # _thread.start_new_thread(self.__start_fota, ())
-            self.__start_fota()
-        else:
-            return False
-        return True
+            return self.__start_fota()
+        return False
 
     def __start_fota(self):
         log.debug("__start_fota")
-        fota_obj = fota()
+        fota_obj = fota(reset_disable=0)
         url1 = self.__files[0]["url"]
         url2 = self.__files[1]["url"] if len(self.__files) > 1 else ""
         log.debug("start httpDownload")
         if url2:
+            # mini fota
             res = fota_obj.httpDownload(url1=url1, url2=url2, callback=self.__fota_callback) if fota_obj else -1
         else:
+            # 差分升级
             res = fota_obj.httpDownload(url1=url1, callback=self.__fota_callback) if fota_obj else -1
-        log.debug("httpDownload res: %s" % res)
         if res == 0:
             self.__ota_timer.start(600 * 1000, 0, self.__ota_timer_callback)
             fota_res = self.__fota_queue.get()
@@ -451,6 +447,7 @@ class AliIotOTA:
         log.debug("__start_sota")
         app_fota_obj = app_fota.new()
         download_infos = [{"url": i["url"], "file_name": i["name"]} for i in self.__files]
+        log.debug("download_infos: %s" % str(download_infos))
         bulk_download_res = app_fota_obj.bulk_download(download_infos)
         log.debug("first bulk_download_res: %s" % str(bulk_download_res))
         count = 0
