@@ -14,8 +14,13 @@
 
 import _thread
 import audio
-from usr.modules.common import Condition, Event
-from usr.modules.logging import getLogger
+
+try:
+    from modules.common import Condition, Event
+    from modules.logging import getLogger
+except ImportError:
+    from usr.modules.common import Condition, Event
+    from usr.modules.logging import getLogger
 
 
 logger = getLogger(__name__)

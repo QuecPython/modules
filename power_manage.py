@@ -22,7 +22,11 @@
 """
 
 import pm
-from usr.modules.logging import getLogger
+
+try:
+    from modules.logging import getLogger
+except ImportError:
+    from usr.modules.logging import getLogger
 
 log = getLogger(__name__)
 

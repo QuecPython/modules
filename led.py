@@ -21,7 +21,10 @@
 @copyright :Copyright (c) 2022
 """
 
-from usr.modules.common import GPIOCtrl
+try:
+    from modules.common import GPIOCtrl
+except ImportError:
+    from usr.modules.common import GPIOCtrl
 
 
 class LED(GPIOCtrl):
