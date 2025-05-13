@@ -1,6 +1,6 @@
 # Independent Function Module
 
-[中文](./README_ZH.md) | English
+[中文](./README.zh.md) | English
 
 ## Introduction
 
